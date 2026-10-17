@@ -146,9 +146,13 @@ const CLEAR = 46; // gap under crouch hazards (stand 56 > 46 > crouch 32)
 
 // ================= Levels =================
 // where each level's secret areas sit (fraction of the segment list); empty = no secret in that level
-const SECRET_AT = [[], [0.62], [], [0.58], [], [0.62], [], [0.55], [], [0.6], [0.58], [0.45, 0.75]];
-const SECRET_STYLE = [[], ['bank'], [], ['bush'], [], ['bank'], [], ['bush'], [], ['bank'], ['bush'], ['bank', 'bush']];
-const CRIT_AT = { 5: ['hedgehog'], 7: ['goose'], 9: ['frog'], 10: ['melon'], 11: ['ice', 'corn'] };
+/* secrets: irregular levels and spots (no every-other-level rhythm, not always mid-level) */
+const SECRET_AT = [[], [0.78], [], [], [0.42], [0.66], [], [], [0.4], [], [0.84], [0.38, 0.72]];
+const SECRET_STYLE = [[], ['bank'], [], [], ['bush'], ['bank'], [], [], ['bush'], [], ['bush'], ['bank', 'bush']];
+const CRIT_AT = { 5: ['hedgehog'], 8: ['frog'], 10: ['ice'], 11: ['goose', 'corn'] };
+/* main-route bonus tryzubs: only in some levels (irregular, none in L1), at most one per level, at varied points, each behind a real challenge:
+   fall = double jump off a crumbling platform over a pit, move = double jump off a moving platform over a pit, vert = off a rising/sinking lift over a pit, trap = take off between timed pop-up spikes with a bee guarding the way */
+const BONUS_AT = { 2: [0.62, 'fall'], 3: [0.24, 'move'], 6: [0.5, 'trap'], 9: [0.33, 'vert'], 11: [0.86, 'move'] };
 const INFO = [
   ['Sunflower Meadow', 'Соняшникова лука', 'Run, jump and collect golden tryzubs!', 'Бігай, стрибай і збирай золоті тризуби!'],
   ['Golden Wheat Fields', 'Золоті пшеничні поля', 'Low thorny hedges ahead: hold S to crouch!', 'Попереду низькі колючі кущі — затисни S, щоб присісти!'],
@@ -262,7 +266,7 @@ function buildLevel(i){
   // high bonus platform: only reachable with the double jump, holds big glowing BONUS tryzubs
   S.bonus = () => { y = lowTo(380); const w = 520; addGround(x, w, y); const bw = 100, bx = Math.round(x + w / 2 - bw / 2), by = y - 205;
     const pl = plat('bonus', bx, by, bw, {}); const b = { x1: bx, x2: bx + bw, y: by, gy: y, pl, items: [] };
-    for (const ox of [50]){ const t = { x: bx + ox, y: by - 40, got: false, ph: R() * 6, big: true }; L.tryz.push(t); b.items.push(t); }
+    for (const ox of [50]){ const t = { x: bx + ox, y: by - 40, got: false, ph: R() * 6, pin: true }; L.tryz.push(t); b.items.push(t); } b.practice = true; /* L1 double-jump practice platform: regular tryzub, no bonus */
     L.bonus.push(b); b.pad = addPad(bx + bw / 2, y, x, w, b); rowT(x + 50, x + 150, y - 42, 2); rowT(x + w - 150, x + w - 50, y - 42, 2);
     if (i === 0 && L.bonus.length === 1) L.hints.push({ x: Math.max(250, x + w / 2 - 320), y: y - 300 < 80 ? 80 : y - 290, t: 'Press W again in the air: DOUBLE JUMP!', ua: 'Натисни W ще раз у повітрі: ПОДВІЙНИЙ СТРИБОК!', dj: true });
     flowers(x, w, y); x += w; };
@@ -296,6 +300,20 @@ function buildLevel(i){
   const trap = o => { L.traps.push(Object.assign({ ph: R() * 10 }, o)); };
   S.popspike = () => { const w = ri(380, 440); addGround(x, w, y); const n = i < 4 ? 2 : 3, per = 3.0 - d * 0.6; for (let k = 0; k < n; k++){ const tw = 40 + ri(0, 2) * 10; trap({ kind: 'pop', x: Math.round(x + 70 + k * (w - 160) / Math.max(1, n - 1) - (n === 1 ? 0 : 0)), w: tw, gy: y, per, ph: k * per / n, h: 22 }); }
     rowT(x + 60, x + w - 60, y - 120, 2); flowers(x, w, y); x += w; };
+  S.bonusC = () => { const kind = BONUS_AT[i][1], bw = 80;
+    const mk = (bx, by, gy, from) => { const pl = plat('bonus', bx, by, bw, {}); const b = { x1: bx, x2: bx + bw, y: by, gy, pl, items: [], kind, from: from || null, challenge: true };
+      const t = { x: bx + bw / 2, y: by - 40, got: false, ph: R() * 6, big: true }; L.tryz.push(t); b.items.push(t); L.bonus.push(b); return b; };
+    if (kind === 'trap'){ y = lowTo(380); const w = 560; addGround(x, w, y); const bx = Math.round(x + w / 2 - bw / 2); mk(bx, y - 205, y);
+      const per = 2.7; [[bx - 130, 0], [bx - 10, 1], [bx + bw + 60, 2]].forEach(([tx, k]) => trap({ kind: 'pop', x: Math.round(tx), w: 70, gy: y, per, ph: k * per / 3, h: 22 }));
+      bee('bob', { cx: bx - 70, cy: y - 150, A: 36 }); flowers(x, 60, y); x += w; return; }
+    y = lowTo(kind === 'vert' ? 420 : 385); /* low banks: room for a bonus that needs a real double jump yet stays below the HUD */
+    const w0 = 200; addGround(x, w0, y); flowers(x, w0, y); x += w0;
+    const g1 = Math.round(rr(gapMin * 0.8, gapMax * 0.8)), pw = 110; let ty = clamp(y - ri(0, 20), 365, 440), pl, px1, px2, top;
+    if (kind === 'move'){ const A = 70; px1 = x + g1; px2 = px1 + 2 * A + pw; pl = plat('move', px1 + A, ty, pw, { A }); L.path.push({ type: 'move', x1: px1, x2: px2, y1: ty, y2: ty }); top = ty; }
+    else if (kind === 'vert'){ ty = clamp(ty, 405, 445); const A = 40; px1 = x + g1; px2 = px1 + pw; pl = plat('vert', px1, ty, pw, { A }); L.path.push({ type: 'vert', x1: px1, x2: px2, y1: ty - A, y2: ty + A }); top = ty - A; }
+    else { px1 = x + g1; px2 = px1 + pw; pl = plat('fall', px1, ty, pw, {}); L.path.push({ type: 'fall', x1: px1, x2: px2, y1: ty, y2: ty }); top = ty; }
+    mk(Math.round((px1 + px2) / 2 - bw / 2 + 30), Math.max(130, top - 200), top, pl);
+    const g2 = Math.round(rr(gapMin * 0.8, gapMax * 0.8)); x = px2 + g2; y = clampY(Math.max(ty, Math.min(ty + 40, 440)) + ri(0, 10)); const w = ri(260, 320); /* never higher than the challenge platform, so the bonus can't be reached with a plain jump from the banks */ addGround(x, w, y); flowers(x, w, y); x += w; };
   S.thorn = () => { const w = ri(340, 400); addGround(x, w, y); const per = 3.2 - d * 0.6; trap({ kind: 'thorn', x: Math.round(x + w / 2 - 25), w: 50, gy: y, per, ph: R() * per, h: 44 }); arcT(x + w / 2 - 110, x + w / 2 + 110, y, y, 2, 90); flowers(x, w, y); x += w; };
   S.pendulum = () => { const w = ri(360, 420); addGround(x, w, y); const ax = x + w / 2; trap({ kind: 'swing', x: ax, ay: y - 170, len: 118, r: 16, amp: 0.95, om: 1.9 + d * 0.9, gy: y }); rowT(x + 50, x + w - 50, y - 42, 2); flowers(x, w, y); x += w; };
   S.acorn = () => { const w = ri(360, 420); addGround(x, w, y); const ty = TH_DROP[i] || 'acorn', n = 2, per = 2.4 - d * 0.5; for (let k = 0; k < n; k++) trap({ kind: 'drop', style: ty, x: Math.round(x + 120 + k * (w - 240)), y0: y - 250, gy: y, per, ph: k * per / 2, r: 9 });
@@ -313,7 +331,7 @@ function buildLevel(i){
   const pool = []; const add = (t, n) => { for (let k = 0; k < n; k++) pool.push(t); };
   add('gap', 4 + Math.floor(i * 0.6)); add('step', 2 + Math.floor(i / 3)); add('crouch', i ? 2 + Math.floor(i / 2) : 0);
   add('spikes', 3 + Math.floor(i * 0.6)); add('pit', 2 + Math.floor(i * 0.55)); add('log', i >= 1 ? 1 + Math.floor((i - 1) / 3) : 0);
-  add('loop', 1 + Math.floor(i / 3)); add('patrol', 3 + Math.floor(i / 3)); add('flat', 2 + Math.floor(i / 6)); add('bonus', 1 + Math.floor(i / 4)); /* secrets are placed separately below */ add('elev', 1 + Math.floor(i / 3));
+  add('loop', 1 + Math.floor(i / 3)); add('patrol', 3 + Math.floor(i / 3)); add('flat', 2 + Math.floor(i / 6) + (i && !SECRET_AT[i].length ? 2 : 0)); /* levels without a secret zone get a bit more route, so each level stays longer than the one before */ add('bonus', i === 0 ? 1 : 0); /* secrets are placed separately below */ add('elev', 1 + Math.floor(i / 3));
   add('popspike', i >= 1 ? 1 + Math.floor(i / 4) : 0); add('pendulum', i >= 2 ? 1 + Math.floor((i - 2) / 4) : 0); add('thorn', i >= 3 ? 1 + Math.floor((i - 3) / 4) : 0);
   add('acorn', i >= 4 ? 1 + Math.floor((i - 4) / 4) : 0); add('geyser', i >= 5 ? 1 : 0); add('ram', i >= 6 ? 1 + Math.floor((i - 6) / 3) : 0); add('wind', i >= 7 ? 1 : 0);
   for (let k = pool.length - 1; k > 0; k--){ const j = Math.floor(R() * (k + 1)); [pool[k], pool[j]] = [pool[j], pool[k]]; }
@@ -321,6 +339,7 @@ function buildLevel(i){
   const fi = pool.indexOf('flat'); if (fi > 0){ pool.splice(fi, 1); pool.unshift('flat'); }
   // secret areas: only in some levels (none in L1), never near the start: well past 35% of the level and after the first checkpoint
   { const at = SECRET_AT[i]; for (let q = at.length - 1; q >= 0; q--) pool.splice(Math.round((pool.length + at.length) * at[q]) - q, 0, 'secret'); }
+  if (BONUS_AT[i]){ let k = Math.round(pool.length * BONUS_AT[i][0]); while (pool[k] === 'secret' || pool[k - 1] === 'secret') k++; pool.splice(k, 0, 'bonusC'); }
 
   addGround(0, 460, 440); rowT(260, 400, 398, 3); flowers(0, 460, 440);
   if (i === 0) L.hints.push({ x: 190, y: 290, t: 'A / D to walk  ·  W to jump', ua: 'A / D — ходити  ·  W — стрибок' });
@@ -361,15 +380,17 @@ function buildLevel(i){
   // drop any upper floater whose lower step was removed (keeps every floater reachable with one jump)
   for (const f of L.floats.slice()) if (f.base - f.y > 115 && !L.floats.some(o => o !== f && o.base === f.base && o.y > f.y && o.y - f.y < 110 && Math.max(o.x1 - f.x2, f.x1 - o.x2) < 60)){
     removeItems(f); L.floats.splice(L.floats.indexOf(f), 1); L.plats.splice(L.plats.indexOf(f.pl), 1); L.pads = L.pads.filter(q => q.under !== f); }
+  /* every level keeps at least 3 springs (bonus platforms no longer bring their own): add one under a high floater that has none */
+  for (const f of L.floats.slice().sort((p, q) => p.y - q.y)){ if (L.pads.length >= 3) break; if (L.pads.some(q => q.under === f) || f.base - f.y < 110) continue; const g = L.ground.find(q => !q.cave && q.y === f.base && q.x <= f.x1 && q.x + q.w >= f.x2); if (g) addPad((f.x1 + f.x2) / 2, g.y, g.x, g.w, f); }
   {
-    const target = Math.round(16 + i * 1.6), bigs = L.tryz.filter(t => (t.big && !t.secret) || t.elev), rest = L.tryz.filter(t => !t.big && !t.secret);
+    const target = Math.round(16 + i * 1.6), bigs = L.tryz.filter(t => (t.big && !t.secret) || t.elev || t.pin), rest = L.tryz.filter(t => !t.big && !t.secret && !t.pin);
     const groundAt = x => { let gy = null; for (const g of L.ground) if (x >= g.x && x <= g.x + g.w) gy = gy == null ? g.y : Math.min(gy, g.y); return gy; };
     const hard = t => { const gy = groundAt(t.x); return gy == null ? 220 + R() * 20 : (gy - t.y) + R() * 20; }; // over a gap / pit = hardest, then height above the floor
     rest.forEach(t => t.hv = hard(t));
     const n = Math.max(0, target - bigs.length), keep = new Set(), x0 = 520, span = (x - 300) - x0;
     for (let k = 0; k < n; k++){ const a = x0 + span * k / n, b = x0 + span * (k + 1) / n; let best = null; for (const t of rest) if (t.x >= a && t.x < b && !keep.has(t) && (!best || t.hv > best.hv)) best = t; if (best) keep.add(best); }
     for (const t of rest.slice().sort((p, q) => q.hv - p.hv)){ if (keep.size >= n) break; if (![...keep].some(k => Math.abs(k.x - t.x) < 140)) keep.add(t); }
-    L.tryz = L.tryz.filter(t => t.big || t.secret || keep.has(t)); for (const f of L.floats.concat(L.bonus)) f.items = f.items.filter(it => !(it.hv !== undefined && !keep.has(it)));
+    L.tryz = L.tryz.filter(t => t.big || t.secret || t.pin || keep.has(t)); for (const f of L.floats.concat(L.bonus)) f.items = f.items.filter(it => !(it.hv !== undefined && !keep.has(it)));
   }
   if (i === 0){ const fp = L.pads.find(q => !L.bonus.some(b => b.pad === q)); if (fp) L.hints.push({ x: fp.x + fp.w / 2, y: Math.max(92, fp.gy - 250), t: 'Jump onto the spring to bounce up high!', ua: 'Стрибни на пружину — злетиш високо!' }); }
   // more bees with mixed flight patterns as levels get harder (≈5 in level 1 → ≈28 in level 12)
@@ -464,7 +485,7 @@ const ACH = [
   { id: 'bee50', icon: 'bee', en: 'Bee Whisperer', ua: 'Друг бджіл', den: 'Bop 100 bees', dua: 'Підстрибни на 100 бджіл', test: () => BEST.stats.bees >= 100, prog: () => [BEST.stats.bees, 100] },
   { id: 'borscht', icon: 'bowl', en: 'Borscht Lover', ua: 'Любитель борщу', den: 'Eat 15 bowls of borscht', dua: 'З’їж 15 мисок борщу', test: () => BEST.stats.borscht >= 15, prog: () => [BEST.stats.borscht, 15] },
   { id: 'collector', icon: 'tryzub', en: 'Collector', ua: 'Збирач', den: 'Collect every tryzub in 3 different levels', dua: 'Збери всі тризуби на 3 різних рівнях', test: () => cntLv(l => l.all) >= 3, prog: () => [cntLv(l => l.all), 3] },
-  { id: 'bonus', icon: 'tryzub', en: 'Bonus Hunter', ua: 'Мисливець за бонусами', den: 'Get every bonus tryzub in 6 different levels', dua: 'Збери всі бонусні тризуби на 6 різних рівнях', test: () => cntLv(l => l.allBonus) >= 6, prog: () => [cntLv(l => l.allBonus), 6] },
+  { id: 'bonus', icon: 'tryzub', en: 'Bonus Hunter', ua: 'Мисливець за бонусами', den: 'Collect 8 big bonus tryzubs (only some levels and secrets hide them)', dua: 'Збери 8 великих бонусних тризубів (вони сховані лише на деяких рівнях і в секретах)', test: () => bigTotal() >= BONUS_GOAL, prog: () => [Math.min(bigTotal(), BONUS_GOAL), BONUS_GOAL] },
   { id: 'secret1', icon: 'key', en: 'Secret Finder', ua: 'Шукач секретів', den: 'Find 3 secret areas', dua: 'Знайди 3 таємні схованки', test: () => secTotal() >= 3, prog: () => [Math.min(secTotal(), 3), 3] },
   { id: 'secretL', icon: 'key', en: 'Treasure Map', ua: 'Карта скарбів', den: 'Find every secret in 2 different levels', dua: 'Знайди всі секрети на 2 різних рівнях', test: () => secFullLv() >= 2, prog: () => [Math.min(secFullLv(), 2), 2] },
   { id: 'secretAll', icon: 'key', en: 'Great Explorer', ua: 'Великий дослідник', den: 'Find every secret in the game', dua: 'Знайди всі секрети в грі', test: () => BEST.levels.every((l, i) => (l.sec || 0) >= LEVELS[i].secrets.length), prog: () => [BEST.levels.reduce((a, l, i) => a + Math.min(l.sec || 0, LEVELS[i].secrets.length), 0), LEVELS.reduce((a, L) => a + L.secrets.length, 0)] },
@@ -483,10 +504,12 @@ const ACH = [
 // tryzub total shown to the player: leaves out items inside secret areas that are not found yet (so totals never give a secret away)
 function bigShown(L){ return L.tryz.filter(q => q.big && !L.secrets.some(s => !s.found && s.items.includes(q))).length; } // bonus tryzubs in unfound secrets stay unannounced
 function tzShown(L){ let n = L.tryz.length; for (const s of L.secrets) if (!s.found) n -= s.items.filter(t => L.tryz.includes(t)).length; return n; }
+const BONUS_GOAL = 8; /* of 12 in the game: 5 on main routes + 7 secret rewards */
+function bigTotal(){ return BEST.levels.reduce((a, l) => a + ((l && l.big) || 0), 0); } // best number of bonus tryzubs collected in one finish of each level
 function secTotal(){ return BEST.levels.reduce((a, l, i) => a + Math.min(l.sec || 0, LEVELS[i].secrets.length), 0); }
 function secFullLv(){ return BEST.levels.filter((l, i) => LEVELS[i].secrets.length > 0 && (l.sec || 0) >= LEVELS[i].secrets.length).length; } // only levels that actually have secrets count
 // rules changed (harder achievements): on load, re-check every unlocked badge against the current rules and re-lock the ones that no longer qualify
-const ACH_RULES = 4, SECRET_LAYOUT = 2;
+const ACH_RULES = 5, SECRET_LAYOUT = 3;
 function recheckAch(){ if (BEST.achRules === ACH_RULES && BEST.secLayout === SECRET_LAYOUT) return 0; let n = 0;
   // secret areas were redesigned: old per-level 'secrets found' counts refer to secrets that no longer exist
   if (BEST.secLayout !== SECRET_LAYOUT){ for (const l of BEST.levels) if (l) l.sec = 0; BEST.secLayout = SECRET_LAYOUT; }
@@ -737,7 +760,7 @@ function completeLevel(){
   const score = levelLiveScore() + bonus;
   G.runScores[G.li] = score; G.runTimes[G.li] = t;
   const b = BEST.levels[G.li]; const nbS = b.score == null || score > b.score, nbT = b.time == null || t < b.time;
-  if (nbS) b.score = score; if (nbT) b.time = t; b.done = true; if (G.tz >= L.tryz.length) b.all = true; const mainBig = L.tryz.filter(q => q.big && !q.secret), nbig = mainBig.length; if (nbig && mainBig.every(q => q.got)) b.allBonus = true; /* secret-zone bonus tryzubs are an extra treat, not needed for Bonus Hunter */ if (!G.oopsN) b.noOops = true; b.sec = Math.max(b.sec || 0, G.secFound); saveBest();
+  if (nbS) b.score = score; if (nbT) b.time = t; b.done = true; if (G.tz >= L.tryz.length) b.all = true; const mainBig = L.tryz.filter(q => q.big && !q.secret), nbig = mainBig.length; if (nbig && mainBig.every(q => q.got)) b.allBonus = true; /* secret-zone bonus tryzubs are an extra treat, not needed for Bonus Hunter */ b.big = Math.max(b.big || 0, G.bigTz); if (!G.oopsN) b.noOops = true; b.sec = Math.max(b.sec || 0, G.secFound); saveBest();
   BEST.unlocked = Math.max(BEST.unlocked || 0, Math.min(11, G.li + 1)); saveBest(); checkAch();
   G.result = { t, tz: G.tz, tot: tzShown(L), big: G.bigTz, nbig: bigShown(L), sec: G.secFound, nsec: L.secrets.length, bees: G.bees, bonus, score, nbS, nbT };
   G.state = 'complete'; G.focus = 0; SFX.win(); petals(50);
@@ -1462,12 +1485,12 @@ function drawWillow(c, x, gy, s, t){
   c.fillStyle = '#8DAF3E'; c.beginPath(); c.ellipse(x, gy - 82 * s, 44 * s, 26 * s, 0, 0, 7); c.fill();
   c.strokeStyle = '#A3C24C'; c.lineWidth = 2.2 * s; for (let k = -40; k <= 40; k += 6){ const sw = Math.sin(t * 1.2 + k * 0.2) * 4 * s; c.beginPath(); c.moveTo(x + k * s, gy - 82 * s + Math.abs(k) * 0.3 * s); c.quadraticCurveTo(x + k * 1.1 * s + sw, gy - 50 * s, x + k * 1.15 * s + sw * 1.5, gy - (22 + hash(k) * 16) * s); c.stroke(); }
 }
-function drawWindmill(c, x, gy, s, t){
+function drawWindmill(c, x, gy, s, t, seed){
   c.fillStyle = '#8B6239'; c.beginPath(); c.moveTo(x - 22 * s, gy); c.lineTo(x - 14 * s, gy - 70 * s); c.lineTo(x + 14 * s, gy - 70 * s); c.lineTo(x + 22 * s, gy); c.fill();
   c.strokeStyle = 'rgba(70,40,15,.5)'; c.lineWidth = 1; for (let k = 1; k < 6; k++){ c.beginPath(); c.moveTo(x - 22 * s + k * 1.3 * s, gy - k * 12 * s); c.lineTo(x + 22 * s - k * 1.3 * s, gy - k * 12 * s); c.stroke(); }
   c.fillStyle = '#C79A4A'; c.beginPath(); c.moveTo(x - 18 * s, gy - 70 * s); c.lineTo(x, gy - 92 * s); c.lineTo(x + 18 * s, gy - 70 * s); c.fill();
   c.fillStyle = '#5B3A1E'; c.fillRect(x - 5 * s, gy - 20 * s, 10 * s, 20 * s);
-  c.save(); c.translate(x, gy - 74 * s); c.rotate(t * 0.8 + x * 0.01);
+  c.save(); c.translate(x, gy - 74 * s); c.rotate(t * 0.8 + (seed || 0) * 1.7); /* phase from a world seed: the blades turn at the same calm speed whatever the camera does */
   for (let k = 0; k < 4; k++){ c.rotate(Math.PI / 2); c.fillStyle = '#6D4C2A'; c.fillRect(-1.5 * s, 0, 3 * s, 52 * s); c.fillStyle = 'rgba(255,250,235,.95)'; c.fillRect(2 * s, 10 * s, 11 * s, 40 * s); c.strokeStyle = '#6D4C2A'; c.lineWidth = 1; c.strokeRect(2 * s, 10 * s, 11 * s, 40 * s); }
   c.restore(); c.fillStyle = '#3B2A1A'; c.beginPath(); c.arc(x, gy - 74 * s, 3.5 * s, 0, 7); c.fill();
 }
@@ -1505,8 +1528,8 @@ function drawKyivDomes(c, x, gy, s, k){
     c.fillStyle = '#5B7FA0'; for (const dx of [-30, -10, 10, 30]) { rrect(c, x + dx * s - 4 * s, gy - 40 * s, 8 * s, 18 * s, 4 * s); c.fill(); }
   }
 }
-function drawBoat(c, x, y, s, t){
-  const bob = Math.sin(t * 2 + x) * 2; c.save(); c.translate(x, y + bob);
+function drawBoat(c, x, y, s, t, seed){
+  const bob = Math.sin(t * 1.6 + (seed || 0) * 2.3) * 1.6; /* calm bob, phase seeded per boat (was seeded by the SCREEN x, so it shook ~19x/s while scrolling) */ c.save(); c.translate(x, y + bob);
   c.fillStyle = '#7A4B26'; c.beginPath(); c.moveTo(-26 * s, 0); c.lineTo(26 * s, 0); c.lineTo(18 * s, 9 * s); c.lineTo(-18 * s, 9 * s); c.fill(); c.fillStyle = '#FFD500'; c.fillRect(-22 * s, 1.5 * s, 44 * s, 2 * s);
   c.fillStyle = '#5B3A1E'; c.fillRect(-1 * s, -40 * s, 2 * s, 40 * s);
   c.fillStyle = '#FFFFFF'; c.beginPath(); c.moveTo(2 * s, -38 * s); c.lineTo(22 * s, -4 * s); c.lineTo(2 * s, -4 * s); c.fill(); c.fillStyle = '#E6F0FF'; c.beginPath(); c.moveTo(-2 * s, -32 * s); c.lineTo(-16 * s, -4 * s); c.lineTo(-2 * s, -4 * s); c.fill();
@@ -1518,20 +1541,18 @@ function drawStack(c, x, gy, s){ // haystack (скирта)
   c.fillStyle = '#6D4C2A'; c.fillRect(x - 1 * s, gy - 70 * s, 2 * s, 14 * s);
 }
 function drawPysanka(c, x, y, s, k){
-  c.save(); c.translate(x, y); const cols = [['#C8102E', '#FFD500'], ['#0057B7', '#FFD500'], ['#1A1A1A', '#E53950'], ['#2E8B3A', '#FFFFFF']][k % 4];
+  c.save(); c.translate(x, y); const cols = [['#C8102E', '#FFD500'], ['#0057B7', '#FFD500'], ['#1A1A1A', '#E53950'], ['#2E8B3A', '#FFFFFF']][((k % 4) + 4) % 4];
   c.fillStyle = cols[0]; c.beginPath(); c.ellipse(0, 0, 5 * s, 7 * s, 0, 0, 7); c.fill();
   c.strokeStyle = cols[1]; c.lineWidth = 1.2 * s; c.beginPath(); c.moveTo(-5 * s, 0); c.lineTo(5 * s, 0); c.stroke();
   c.beginPath(); for (let q = -4; q <= 4; q += 2){ c.moveTo(q * s, -2.5 * s); c.lineTo(q * s + 1 * s, -4 * s); } c.stroke();
   c.fillStyle = cols[1]; c.beginPath(); c.arc(0, 3.5 * s, 1.3 * s, 0, 7); c.fill(); c.restore();
 }
-function drawFence(c, x0, x1, y, t){ // wattle fence (тин) with clay pots and pysanky on the posts
-  c.strokeStyle = '#8B6239'; c.lineWidth = 3;
+function drawFence(c, x0, x1, y, t, ox){ /* wattle fence (тин) with clay pots and pysanky on the posts; ox = world offset of screen x 0, so the weave and the pot/pysanka pattern are fixed to the world (they used screen x and shimmered / jumped every 40 px while scrolling) */
+  ox = ox || 0; c.strokeStyle = '#8B6239'; c.lineWidth = 3;
   for (let x = x0; x < x1; x += 40){ c.fillStyle = '#6D4C2A'; c.fillRect(x, y - 30, 4, 34); }
-  for (let r = 0; r < 4; r++){ c.strokeStyle = r % 2 ? '#9C7044' : '#7E5631'; c.beginPath(); for (let x = x0; x <= x1; x += 10) c.lineTo(x, y - 6 - r * 6 + Math.sin(x * 0.31 + r) * 1.5); c.stroke(); }
-  for (let x = x0, k = 0; x < x1; x += 40, k++){ if (k % 3 === 0){ c.fillStyle = '#B8642E'; c.beginPath(); c.ellipse(x + 2, y - 36, 6, 7, 0, 0, 7); c.fill(); c.fillRect(x - 1, y - 45, 6, 4); } else drawPysanka(c, x + 2, y - 38, 1, k); }
+  for (let r = 0; r < 4; r++){ c.strokeStyle = r % 2 ? '#9C7044' : '#7E5631'; c.beginPath(); for (let x = x0; x <= x1; x += 10) c.lineTo(x, y - 6 - r * 6 + Math.sin((x + ox) * 0.31 + r) * 1.5); c.stroke(); }
+  for (let x = x0; x < x1; x += 40){ const k = Math.round((x + ox) / 40); if (((k % 3) + 3) % 3 === 0){ c.fillStyle = '#B8642E'; c.beginPath(); c.ellipse(x + 2, y - 36, 6, 7, 0, 0, 7); c.fill(); c.fillRect(x - 1, y - 45, 6, 4); } else drawPysanka(c, x + 2, y - 38, 1, k); }
 }
-
-// near flowers (background row, in-world flowers and foreground) per world
 function drawNear(c, kind, x, gy, h, s, sway, seed){ const sd = seed != null ? seed : Math.round(x);
   const tx = x + sway, ty = gy - h;
   const stem = (col, w) => { c.strokeStyle = col || '#3C8C2C'; c.lineWidth = Math.max(1.5, (w || 4) * s); c.lineCap = 'round'; c.beginPath(); c.moveTo(x, gy); c.quadraticCurveTo(x + sway * 0.2, gy - h * 0.5, tx, ty); c.stroke(); };
@@ -1580,21 +1601,22 @@ function drawBackground(c, wi, camX, t){
   if (S.far === 'poppyhill'){ c.fillStyle = 'rgba(227,38,46,.55)'; for (let k = 0; k < 160; k++){ const wx = k * 13 + hash(k) * 9, x = ((wx - far) % (W + 40) + W + 40) % (W + 40) - 20; const y = hillY(x + far, 335, 30, 0.004, 18, 0.011, 0) + 6 + hash(k * 3) * 30; c.beginPath(); c.arc(x, y, 2 + hash(k * 7) * 2, 0, 7); c.fill(); } }
   // landmark props on the far hills (parallax 0.22)
   const kx = camX * 0.22, ksp = S.far === 'khata' || S.far === 'village' || S.far === 'snowvillage' ? 560 : S.far === 'castle' || S.far === 'kyiv' ? 520 : 300;
+  c.save(); occClip(c, 312);
   for (let k = Math.floor(kx / ksp) - 1; k < Math.floor(kx / ksp) + Math.ceil(W / ksp) + 2; k++){ const x = k * ksp - kx + hash(k * 7) * (ksp * 0.35), s = 0.42 + hash(k + 2) * 0.15, by = 352;
     switch (S.far){
       case 'khata': case 'village': case 'snowvillage': c.drawImage(KHATA, x, by - 150 * s, 200 * s, 150 * s); if (hash(k + 9) < 0.6) c.drawImage(KHATA, x + 95 * s, by + 8 - 130 * s, 175 * s, 130 * s);
         if (S.far === 'snowvillage'){ c.fillStyle = '#FFFFFF'; for (const [ox, w2, sc] of [[0, 200, s], [95 * s, 175, s * 0.875]]){ if (ox && hash(k + 9) >= 0.6) continue; c.beginPath(); c.moveTo(x + ox + 12 * sc, by - 150 * s + 78 * sc + (ox ? 8 : 0)); c.lineTo(x + ox + 62 * sc, by - 150 * s + 20 * sc + (ox ? 8 : 0)); c.lineTo(x + ox + 138 * sc, by - 150 * s + 20 * sc + (ox ? 8 : 0)); c.lineTo(x + ox + 188 * sc, by - 150 * s + 78 * sc + (ox ? 8 : 0)); c.lineTo(x + ox + 150 * sc, by - 150 * s + 50 * sc + (ox ? 8 : 0)); c.lineTo(x + ox + 50 * sc, by - 150 * s + 50 * sc + (ox ? 8 : 0)); c.closePath(); c.fill(); } drawPine(c, x - 20, by, 80 * s * 1.6, true); }
-        if (S.far === 'village') drawWindmill(c, x + 300 * s, by, s * 0.9, t); break;
+        if (S.far === 'village') drawWindmill(c, x + 300 * s, by, s * 0.9, t, k); break;
       case 'stacks': drawStack(c, x, by, s * 1.4); if (hash(k + 4) < 0.5) drawStack(c, x + 50 * s, by + 4, s * 1.1); break;
       case 'cherry': drawCherryTree(c, x, by, s * 1.5, t, k * 31); if (hash(k + 4) < 0.6) drawCherryTree(c, x + 70 * s, by + 6, s * 1.2, t, k * 31 + 17); break;
       case 'river': break;
       case 'church': drawPine(c, x - 40, by, 110 * s * 1.6, false); drawPine(c, x + 50, by + 6, 90 * s * 1.6, false); if (k % 3 === 0) drawWoodChurch(c, x + 130 * s, by, s * 1.5); break;
       case 'poppyhill': if (k % 2 === 0) c.drawImage(KHATA, x, by - 120 * s, 160 * s, 120 * s); break;
-      case 'windmill': drawWindmill(c, x, by, s * 1.6, t); break;
+      case 'windmill': drawWindmill(c, x, by, s * 1.6, t, k); break;
       case 'willow': drawWillow(c, x, by, s * 1.6, t); break;
       case 'castle': if (k % 2 === 0) drawCastle(c, x + 60, by - 10, s * 1.5); else drawPine(c, x, by, 70 * s * 1.6, false); break;
       case 'kyiv': drawKyivDomes(c, x + 60, by, s * 1.5, ((k % 2) + 2) % 2); break;
-    } }
+    } } c.restore();
   // near hills
   const nh = camX * 0.3; c.fillStyle = S.hills[1]; c.beginPath(); c.moveTo(0, H);
   for (let x = 0; x <= W; x += 16) c.lineTo(x, hillY(x + nh, 385, 24, 0.006, 12, 0.017, 1.3)); c.lineTo(W, H); c.fill();
@@ -1606,10 +1628,23 @@ function drawBackground(c, wi, camX, t){
   const bf = camX * 0.62, bsp = S.near === 'sun' || S.near === 'wheat' || S.near === 'poppy' || S.near === 'cornflower' ? 58 : 84;
   for (let k = Math.floor(bf / bsp) - 1; k < Math.floor(bf / bsp) + W / bsp + 2; k++){ const x = k * bsp - bf + hash(k) * 30; const h = 40 + hash(k + 1) * 45; drawNear(c, S.near, x, 470 + hash(k + 4) * 25, h, 0.3 + hash(k + 8) * 0.12, Math.sin(t * 1.3 + k) * 2, k * 13 + 1); }
   // stream / ice at the bottom
+  if (S.id === 'river'){ // Dnipro: only ONE background river (the sailboat lane); the strip below is the sandy bank with grass tufts. Pits still show water (drawPitWater, world space)
+    const sg2 = c.createLinearGradient(0, 488, 0, H); sg2.addColorStop(0, '#E4CF96'); sg2.addColorStop(1, '#CDB277'); c.fillStyle = sg2; c.fillRect(0, 488, W, H - 488);
+    const bx = camX * 0.9; for (let k = Math.floor(bx / 46) - 1; k < Math.floor(bx / 46) + W / 46 + 2; k++){ const x = k * 46 - bx + hash(k + 50) * 20, y = 500 + hash(k + 61) * 34; c.fillStyle = k % 4 === 0 ? 'rgba(160,130,80,.45)' : 'rgba(110,170,80,.75)'; if (k % 4 === 0){ c.beginPath(); c.ellipse(x, y, 5 + hash(k) * 4, 2.5, 0, 0, 7); c.fill(); } else { c.beginPath(); c.moveTo(x - 6, y); c.lineTo(x - 1, y - 9 - hash(k) * 6); c.lineTo(x + 1, y); c.lineTo(x + 5, y - 7 - hash(k + 2) * 5); c.lineTo(x + 7, y); c.fill(); } }
+  } else {
   const wg = c.createLinearGradient(0, 505, 0, H); wg.addColorStop(0, S.water[0]); wg.addColorStop(1, S.water[1]); c.fillStyle = wg; c.fillRect(0, 505, W, H - 505);
   c.strokeStyle = S.snow ? 'rgba(255,255,255,.8)' : 'rgba(255,255,255,.55)'; c.lineWidth = 2; for (let k = 0; k < 14; k++){ const x = ((k * 97 - camX * 0.9 + (S.snow ? 0 : t * 20)) % (W + 60) + W + 60) % (W + 60) - 30; c.beginPath(); c.moveTo(x, 518 + (k % 3) * 7); c.quadraticCurveTo(x + 10, 514 + (k % 3) * 7, x + 22, 518 + (k % 3) * 7); c.stroke(); }
+  }
   if (S.golden){ c.fillStyle = 'rgba(255,170,80,.10)'; c.fillRect(0, 0, W, H); }
 }
+let BAND_OCC = null; /* set while drawing a level: screen x -> screen y of the top of the level's ground there (H when it's a pit) */
+function groundTopFn(L, cam){ const gs = L.ground.filter(q => !q.cave), ss = L.secrets || [];
+  const f = sx => { const wx = sx + cam; let top = H; for (const q of gs) if (wx >= q.x && wx < q.x + q.w && q.y < top) top = q.y; for (const z of ss) if (wx >= z.x1 && wx < z.x2 && z.y1 - 18 < top) top = z.y1 - 18; return top; };
+  /* exact screen-x breakpoints (ground / secret edges), so masks follow the terrain edge to the pixel and never step or shimmer while scrolling */
+  f.edges = () => { const e = [0, W]; for (const q of gs){ e.push(q.x - cam, q.x + q.w - cam); } for (const z of ss) e.push(z.x1 - cam, z.x2 - cam); return [...new Set(e.filter(v => v >= 0 && v <= W))].sort((a, b) => a - b); };
+  return f; }
+/* hide background decorations in the screen columns where the level's terrain stands higher than thr, so only clean sky/hills show above tall hills (no roof or sail tips poking out of the grass) */
+function occClip(c, thr){ if (!BAND_OCC) return; c.beginPath(); const e = BAND_OCC.edges(); for (let k = 0; k + 1 < e.length; k++){ const a = e[k], b = e[k + 1]; if (b - a > 0.01 && BAND_OCC((a + b) / 2) >= thr) c.rect(a, -10, b - a, H + 20); } c.rect(-1, -10, 0.5, 0.5); c.clip(); }
 function drawBand(c, S, wf, t){
   const y0 = 392;
   const wrap = (sp, f) => { const x0 = -((wf % sp) + sp) % sp; for (let x = x0, k = Math.floor(wf / sp); x < W + sp; x += sp, k++) f(x, k); };
@@ -1618,17 +1653,23 @@ function drawBand(c, S, wf, t){
     case 'wheat2': wrap(480, x => c.drawImage(WHEAT, x, y0 - 10, 480, 170)); c.fillStyle = 'rgba(255,220,120,.25)'; c.fillRect(0, y0, W, 160); wrap(260, (x, k) => drawStack(c, x + 60, y0 + 30, 0.9)); break;
     default: {
       const col = { orchard: ['#9CD27E', '#7DBE5F'], fence: ['#A6D884', '#86C366'], river: ['#E4CF96', '#CDB277'], pines: ['#4F8F5C', '#3B7A4A'], poppy: ['#8CC765', '#73B04F'], meadow: ['#A9D678', '#8EC25C'], pond: ['#B2C26A', '#93A750'], rocks: ['#B9C78E', '#9DB06E'], snow: ['#F4F9FF', '#E1ECF7'], city: ['#B7D9A0', '#97C481'] }[S.band] || ['#9CD27E', '#7DBE5F'];
-      const g = c.createLinearGradient(0, y0, 0, y0 + 150); g.addColorStop(0, col[0]); g.addColorStop(1, col[1]); c.fillStyle = g; c.beginPath(); c.moveTo(0, H); for (let x = 0; x <= W; x += 20) c.lineTo(x, y0 + 14 + Math.sin((x + wf) * 0.012) * 6); c.lineTo(W, H); c.fill();
+      const g = c.createLinearGradient(0, y0, 0, y0 + 150); g.addColorStop(0, col[0]); g.addColorStop(1, col[1]); c.fillStyle = g; c.beginPath(); c.moveTo(0, H); for (let x = 0; x <= W; x += 20) c.lineTo(x, y0 + 14 + Math.sin((x + wf) * 0.012) * 6); c.lineTo(W, H); c.fill(); c.save(); occClip(c, y0 + 30);
       if (S.band === 'orchard') wrap(150, (x, k) => drawCherryTree(c, x + hash(k) * 40, y0 + 52, 0.8, t, k * 31 + 5));
-      else if (S.band === 'fence') { drawFence(c, -((wf % 40) + 40) % 40 - 40, W + 40, y0 + 62, t); wrap(500, (x, k) => { drawNear(c, 'mallow', x + 40, y0 + 60, 60, 0.6, 0, k * 7); drawNear(c, 'mallow', x + 70, y0 + 60, 48, 0.55, 0, k * 7 + 3); }); }
-      else if (S.band === 'river'){ c.fillStyle = '#3E9FE0'; c.fillRect(0, y0 + 26, W, 30); c.fillStyle = 'rgba(255,255,255,.5)'; for (let k = 0; k < 20; k++){ const x = ((k * 61 - wf * 1.1 + t * 15) % (W + 40) + W + 40) % (W + 40) - 20; c.fillRect(x, y0 + 34 + (k % 3) * 7, 16, 2); } wrap(380, (x, k) => drawBoat(c, x + hash(k) * 120 + ((t * 8) % 380), y0 + 40, 0.8 + hash(k + 1) * 0.3, t)); }
+      else if (S.band === 'fence') { drawFence(c, -((wf % 40) + 40) % 40 - 40, W + 40, y0 + 62, t, wf); wrap(500, (x, k) => { drawNear(c, 'mallow', x + 40, y0 + 60, 60, 0.6, 0, k * 7); drawNear(c, 'mallow', x + 70, y0 + 60, 48, 0.55, 0, k * 7 + 3); }); }
+      else if (S.band === 'river'){ c.fillStyle = '#3E9FE0'; c.fillRect(0, y0 + 26, W, 30); c.fillStyle = 'rgba(255,255,255,.5)';
+        // ripples: exactly the band's parallax plus a slow current, wrapped well off-screen
+        for (let k = 0; k < 20; k++){ const x = ((k * 61 - wf + t * 6) % (W + 80) + W + 80) % (W + 80) - 40; c.fillRect(x, y0 + 34 + (k % 3) * 7, 16, 2); }
+        /* boats only show where the river is actually visible: columns where the level's ground stands higher than the water are clipped, so no sails poke up out of the grass */
+        c.save(); occClip(c, y0 + 50);
+        for (const bt of riverBoats(wf, t)) drawBoat(c, bt.x, y0 + 40, bt.s, t, bt.k); c.restore(); }
       else if (S.band === 'pines') wrap(70, (x, k) => drawPine(c, x + hash(k) * 30, y0 + 70, 70 + hash(k + 3) * 40, false));
       else if (S.band === 'poppy'){ for (let k = 0; k < 220; k++){ const x = ((k * 23 - wf) % (W + 30) + W + 30) % (W + 30) - 15, y = y0 + 22 + hash(k) * 100; c.fillStyle = k % 9 === 0 ? '#FFFFFF' : '#E3262E'; c.beginPath(); c.arc(x, y, 2.5 + hash(k * 3) * 2.5 * (y - y0) / 80, 0, 7); c.fill(); } }
       else if (S.band === 'meadow'){ for (let k = 0; k < 160; k++){ const x = ((k * 29 - wf) % (W + 30) + W + 30) % (W + 30) - 15, y = y0 + 24 + hash(k) * 100; c.fillStyle = ['#3D6FE0', '#FFFFFF', '#FFD500'][k % 3]; c.beginPath(); c.arc(x, y, 2 + hash(k * 3) * 2, 0, 7); c.fill(); } }
-      else if (S.band === 'pond'){ c.fillStyle = '#E8A75C'; c.beginPath(); c.ellipse(W / 2 - ((wf * 0.4) % 600) + 300, y0 + 50, 420, 26, 0, 0, 7); c.fill(); c.fillStyle = 'rgba(255,240,200,.6)'; for (let k = 0; k < 12; k++) c.fillRect(((k * 83 - wf * 0.5) % W + W) % W, y0 + 46 + (k % 3) * 6, 22, 2); c.fillStyle = '#6E9A3A'; wrap(140, (x, k) => { c.beginPath(); c.ellipse(x + 30, y0 + 52, 10, 4, 0, 0, 7); c.fill(); }); wrap(220, (x, k) => drawWillow(c, x + 100, y0 + 70, 0.9, t)); }
+      else if (S.band === 'pond'){ c.fillStyle = '#E8A75C'; wrap(1100, x => { c.beginPath(); c.ellipse(x + 550, y0 + 50, 420, 26, 0, 0, 7); c.fill(); }); c.fillStyle = 'rgba(255,240,200,.6)'; for (let k = 0; k < 12; k++) c.fillRect(((k * 83 - wf + t * 4) % (W + 60) + W + 60) % (W + 60) - 30, y0 + 46 + (k % 3) * 6, 22, 2); c.fillStyle = '#6E9A3A'; wrap(140, (x, k) => { c.beginPath(); c.ellipse(x + 30, y0 + 52, 10, 4, 0, 0, 7); c.fill(); }); wrap(220, (x, k) => drawWillow(c, x + 100, y0 + 70, 0.9, t)); }
       else if (S.band === 'rocks'){ wrap(120, (x, k) => { c.fillStyle = '#A9A196'; c.beginPath(); c.moveTo(x, y0 + 90); c.lineTo(x + 20, y0 + 40 + hash(k) * 20); c.lineTo(x + 60, y0 + 30 + hash(k + 1) * 30); c.lineTo(x + 100, y0 + 90); c.fill(); c.fillStyle = 'rgba(255,255,255,.2)'; c.beginPath(); c.moveTo(x + 20, y0 + 50 + hash(k) * 10); c.lineTo(x + 60, y0 + 34 + hash(k + 1) * 30); c.lineTo(x + 50, y0 + 70); c.fill(); }); }
-      else if (S.band === 'snow'){ wrap(110, (x, k) => drawPine(c, x + hash(k) * 40, y0 + 60, 60 + hash(k + 3) * 40, true)); c.fillStyle = 'rgba(255,255,255,.9)'; for (let k = 0; k < 40; k++){ const x = ((k * 53 - wf) % W + W) % W; c.fillRect(x, y0 + 70 + hash(k) * 70, 2, 2); } }
+      else if (S.band === 'snow'){ wrap(110, (x, k) => drawPine(c, x + hash(k) * 40, y0 + 60, 60 + hash(k + 3) * 40, true)); c.fillStyle = 'rgba(255,255,255,.9)'; for (let k = 0; k < 40; k++){ const x = ((k * 53 - wf) % (W + 20) + W + 20) % (W + 20) - 10; c.fillRect(x, y0 + 70 + hash(k) * 70, 2, 2); } }
       else if (S.band === 'city'){ wrap(90, (x, k) => { const h2 = 40 + hash(k) * 30; c.fillStyle = ['#F2E6D0', '#E8D3B0', '#FFFFFF', '#F6E2C4'][k % 4]; c.fillRect(x, y0 + 60 - h2, 70, h2 + 10); c.fillStyle = k % 3 ? '#A0522D' : '#3D7A4F'; c.beginPath(); c.moveTo(x - 4, y0 + 60 - h2); c.lineTo(x + 35, y0 + 40 - h2); c.lineTo(x + 74, y0 + 60 - h2); c.fill(); c.fillStyle = '#7FA9C9'; for (let q = 0; q < 3; q++) c.fillRect(x + 10 + q * 20, y0 + 70 - h2 + 8, 9, 12); }); wrap(260, (x, k) => drawNear(c, 'chestnut', x + 40, y0 + 80, 70, 0.8, 0)); }
+      c.restore();
     }
   }
 }
@@ -1777,6 +1818,18 @@ function drawStorkStuff(c, B, t){
     else { c.fillStyle = '#A0682F'; c.beginPath(); c.moveTo(-32, -36); c.quadraticCurveTo(0, -56, 32, -36); c.closePath(); c.fill(); c.fillStyle = '#FFD500'; c.fillRect(-5, -44, 10, 12); c.fillStyle = '#0057B7'; c.beginPath(); c.arc(0, -38, 2.5, 0, 7); c.fill(); }
     c.restore(); }
 }
+
+// pit water drawn in world space only inside the gaps between ground pieces (used where the background has no bottom stream)
+function drawPitWater(c, L, cam, t){ const S = TH; const gs = L.ground.filter(q => !q.cave).sort((a, b) => a.x - b.x);
+  for (let k = 0; k + 1 < gs.length; k++){ const e1 = gs[k].x + gs[k].w, e2 = gs[k + 1].x; if (e2 - e1 < 4 || e2 < cam - 20 || e1 > cam + W + 20) continue;
+    const g = c.createLinearGradient(0, 505, 0, H); g.addColorStop(0, S.water[0]); g.addColorStop(1, S.water[1]); c.fillStyle = g; c.fillRect(e1, 505, e2 - e1, H - 505);
+    c.fillStyle = 'rgba(255,255,255,.35)'; c.fillRect(e1, 505, e2 - e1, 3);
+    c.strokeStyle = 'rgba(255,255,255,.55)'; c.lineWidth = 2; for (let x = e1 + 10; x < e2 - 20; x += 46){ const xx = x + ((t * 20 + hash(x) * 30) % 26); if (xx > e2 - 18) continue; c.beginPath(); c.moveTo(xx, 520 + hash(x + 1) * 12); c.lineTo(xx + 14, 520 + hash(x + 1) * 12); c.stroke(); } } }
+
+// sailboats of the Dnipro band live in band space: slot k sits at k*sp + a seeded offset and drifts calmly with the current (6 px/s).
+// Screen x = band x - wf, where wf is exactly the band's parallax (camX * 0.45), so they never outrun the water they float on.
+function riverBoats(wf, t){ const bsp = 380, drift = t * 6, out = [], k0 = Math.floor((wf - drift - 160) / bsp) - 1;
+  for (let k = k0; k <= k0 + Math.ceil(W / bsp) + 3; k++){ const x = k * bsp + hash(k * 3 + 1) * 160 + drift - wf; if (x > -80 && x < W + 80) out.push({ k, x, s: 0.8 + hash(k + 1) * 0.3 }); } return out; }
 // ================= Game rendering =================
 function playerPose(){
   if (P.hurtT > 0) return 'dizzy';
@@ -1825,12 +1878,13 @@ function drawStorkBar(){ const B = G.stork; ctx.save(); ctx.fillStyle = 'rgba(25
   ctx.strokeStyle = 'rgba(0,0,0,.25)'; ctx.lineWidth = 1; for (let k = 1; k < STORK_HP; k++){ ctx.beginPath(); ctx.moveTo(306 + 348 * k / STORK_HP, 508); ctx.lineTo(306 + 348 * k / STORK_HP, 520); ctx.stroke(); } ctx.restore(); }
 function renderGame(){
   const L = G.L, t = G.T, cam = G.camX;
-  const wi = L.world != null ? L.world : L.i; setWorld(wi); drawBackground(ctx, wi, cam, t);
+  const wi = L.world != null ? L.world : L.i; setWorld(wi); BAND_OCC = groundTopFn(L, Math.round(cam)); drawBackground(ctx, wi, cam, t); BAND_OCC = null;
   if (G.stork){ const B = G.stork, k = B.done ? 0 : B.act ? 1 : 0.5; G.gloom = approach(G.gloom || 0, k, 0.02); if (G.gloom > 0.01){ ctx.fillStyle = 'rgba(40,50,80,' + (0.32 * G.gloom) + ')'; ctx.fillRect(0, 0, W, H); }
     if (B.done){ ctx.save(); ctx.globalAlpha = 0.55; const cols = ['#E53935', '#FB8C00', '#FFD500', '#43A047', '#1E88E5', '#5E35B1']; cols.forEach((col, k2) => { ctx.strokeStyle = col; ctx.lineWidth = 9; ctx.beginPath(); ctx.arc(L.boss.x1 + 480 - cam, 520, 330 - k2 * 9, Math.PI, 0); ctx.stroke(); }); ctx.restore(); } }
   ctx.save(); ctx.translate(-Math.round(cam), 0);
   const vis = (x1, x2) => x2 > cam - 60 && x1 < cam + W + 60;
   for (const f of L.flowers) if (vis(f.x - 30, f.x + 30)) drawNear(ctx, TH.near, f.x, f.y + 2, f.h, f.s, Math.sin(t * 1.4 + f.ph) * 2.5, Math.round(f.x));
+  if ((WORLDS[wi] || {}).id === 'river') drawPitWater(ctx, L, cam, t); // L5: pits keep their water, the background has no second river
   for (const g of L.ground) if (vis(g.x, g.x + g.w)) drawGround(ctx, g, L.tod);
   for (const s of L.spikes) if (vis(s.x, s.x + s.w)) drawSpikes(ctx, s);
   for (const pd of L.pads) if (vis(pd.x - 20, pd.x + pd.w + 20)) drawPad(ctx, pd, t);
@@ -1896,7 +1950,7 @@ function drawHUD(){
   // borscht lives
   const lx = 372; for (let k = 0; k < 3; k++){ if (k < G.lives) drawBorscht(ctx, lx + k * 33, cy + 3, 0.95, G.T + k); else { ctx.save(); ctx.globalAlpha = 0.28; ctx.filter = 'grayscale(1)'; drawBorscht(ctx, lx + k * 33, cy + 3, 0.95, 0); ctx.restore(); } }
   drawTryzub(ctx, 514, cy - 4, 0.7); ctx.fillStyle = '#7A5200'; ctx.font = font(21); ctx.fillText(G.tz + '/' + tzShown(G.L), 536, cy - 7);
-  { const nb = bigShown(G.L), bt = '★ Bonus ' + G.bigTz + '/' + nb + ' · Бонус'; let bf = 11; ctx.font = font(bf); while (ctx.measureText(bt).width > 112 && bf > 8){ bf--; ctx.font = font(bf); } ctx.fillStyle = G.bigTz && G.bigTz === nb ? '#C77800' : '#0057B7'; ctx.fillText(bt, 500, cy + 15); }
+  if (G.bigTz > 0){ /* no total: players can't tell which levels hide a bonus tryzub; the counter only appears once one is found */ const bt = '★ Bonus ' + G.bigTz + ' · Бонус'; let bf = 11; ctx.font = font(bf); while (ctx.measureText(bt).width > 112 && bf > 8){ bf--; ctx.font = font(bf); } ctx.fillStyle = '#C77800'; ctx.fillText(bt, 500, cy + 15); }
   ctx.fillStyle = '#0D47A1'; { const st = 'Score ' + (runScoreSoFar() + levelLiveScore()); let sf = 20; ctx.font = font(sf); while (ctx.measureText(st).width > 138 && sf > 13){ sf--; ctx.font = font(sf); } ctx.fillText(st, 622, cy - 6); } ctx.font = font(12, false); ctx.fillStyle = '#1B5E9E'; ctx.fillText('Рахунок', 622, cy + 14);
   ctx.strokeStyle = '#0D47A1'; ctx.lineWidth = 2.4; ctx.beginPath(); ctx.arc(770, cy, 11, 0, 7); ctx.stroke(); ctx.beginPath(); ctx.moveTo(770, cy); ctx.lineTo(770, cy - 7); ctx.moveTo(770, cy); ctx.lineTo(775, cy + 3); ctx.stroke();
   ctx.font = font(22); ctx.fillText(fmtTime(G.time), 786, cy);
@@ -2307,7 +2361,7 @@ function renderOverlay(){
     ctx.fillText('Taras is a little dizzy and needs a rest.', 480, 200); ctx.font = font(14, false); ctx.fillStyle = '#1B5E9E'; ctx.fillText('Тарасові трохи паморочиться — йому треба відпочити.', 480, 219); ctx.font = font(16); ctx.fillStyle = '#0D47A1'; ctx.fillText(G.li === BONUS ? 'Beat level 12 again · Пройди 12 рівень знову' : G.cp ? 'Back with 3 borscht · Знову 3 борщі' : 'Level ' + (G.li + 1) + ', 3 borscht · Рівень ' + (G.li + 1) + ', 3 борщі', 480, 246); ctx.font = font(14, false); ctx.fillText('Tryzubs this try · Тризуби цієї спроби: ' + G.tz + ' / ' + G.L.tryz.length, 480, 270);
     drawTaras(ctx, 316, 456, { face: 1, pose: 'dizzy', t: G.titleT, scale: 1.2 }); drawTryzub(ctx, 646, 430, 0.9); }
   if (s === 'complete'){ const r = G.result; panel(220, 64, 520, 430); titleText('Level Complete!', 480, 114, 32); ctx.font = font(18); ctx.fillStyle = '#C8102E'; ctx.textAlign = 'center'; ctx.fillText('Рівень пройдено!', 480, 138); ctx.font = font(14, false); ctx.fillStyle = '#0D47A1'; ctx.fillText(G.L.name + ' · ' + G.L.ua + '  ·  Чудово!', 480, 160);
-    const rows = [['Level time · Час', fmtTime(r.t) + (r.nbT ? '   ★ best · рекорд!' : '')], ['Tryzubs · Тризуби', r.tz + ' / ' + r.tot], ['Bonus · Бонус', r.big + ' / ' + r.nbig + '  (+500)'], ['Bees stomped · Бджоли', r.bees + '  (×100)'], ...(r.sec > 0 ? [['Secrets found · Секрети', r.sec + ' / ' + r.nsec]] : []), ['Time bonus · Бонус за час', '+' + r.bonus], ['Borscht carried on · Борщ далі', G.lives + ' / 3'], ['Level score · Рахунок', r.score + (r.nbS ? '   ★ best · рекорд!' : '')]];
+    const rows = [['Level time · Час', fmtTime(r.t) + (r.nbT ? '   ★ best · рекорд!' : '')], ['Tryzubs · Тризуби', r.tz + ' / ' + r.tot], ...(r.big > 0 ? [['Bonus · Бонус', '★ ' + r.big + '  (+500)']] : []), ['Bees stomped · Бджоли', r.bees + '  (×100)'], ...(r.sec > 0 ? [['Secrets found · Секрети', r.sec + ' / ' + r.nsec]] : []), ['Time bonus · Бонус за час', '+' + r.bonus], ['Borscht carried on · Борщ далі', G.lives + ' / 3'], ['Level score · Рахунок', r.score + (r.nbS ? '   ★ best · рекорд!' : '')]];
     rows.forEach((rw, k) => { const y = 184 + k * 24; ctx.textAlign = 'left'; ctx.font = font(16); ctx.fillStyle = '#0D47A1'; ctx.fillText(rw[0], 262, y); ctx.textAlign = 'right'; ctx.fillStyle = k === rows.length - 1 ? '#C8102E' : '#222'; ctx.fillText(rw[1], 698, y); });
     drawTryzub(ctx, 262, 118, 0.8); drawTryzub(ctx, 698, 118, 0.8); }
   if (s === 'win'){ const wi = G.winInfo; panel(90, 26, 780, 500); titleText('You win! · Перемога!', 480, 72, 32); ctx.font = font(15); ctx.fillStyle = '#C8102E'; ctx.textAlign = 'center'; ctx.fillText('You did it, Taras! · Ти зміг, Тарасе! Слава Україні!', 480, 94);
@@ -2392,7 +2446,7 @@ requestAnimationFrame(frame);
 
 // ================= Test hooks =================
 recheckAch(); // after UPG / COS exist, so every rule can be evaluated
-window.__game = { critBox, secFullLv, bigShown, tzShown, recheckAch, secTotal, hintBox, hintClashes, hintObstacles, hurt, respawnSafe, spotSafe, trapSpan, get safe(){ return G.safe; }, MAX_LIVES, saveBest, openChest, startBonus, replayLevel12, buildBonus, BONUS, trapState, trapHits, storkPhase, hitStork, get stork(){ return G.stork; }, ACH, checkAch, achEvent, get achQueue(){ return achQueue; }, WORLDS, SFX, levelLiveScore, get particles(){ return particles; }, tk, pointers, drawTaras, drawBee, drawTryzub, ctx, G, P, PH, CLEAR, LEVELS, INFO, keys, buildLevel, startLevel, startRun, getButtons, clickAt, render, completeLevel, finishGame, toMenu,
+window.__game = { BONUS_AT, bigTotal, BONUS_GOAL, riverBoats, drawWindmill, drawBoat, drawFence, groundTopFn, restartFromCheckpoint, startRun, critBox, secFullLv, bigShown, tzShown, recheckAch, secTotal, hintBox, hintClashes, hintObstacles, hurt, respawnSafe, spotSafe, trapSpan, get safe(){ return G.safe; }, MAX_LIVES, saveBest, openChest, startBonus, replayLevel12, buildBonus, BONUS, trapState, trapHits, storkPhase, hitStork, get stork(){ return G.stork; }, ACH, checkAch, achEvent, get achQueue(){ return achQueue; }, WORLDS, SFX, levelLiveScore, get particles(){ return particles; }, tk, pointers, drawTaras, drawBee, drawTryzub, ctx, G, P, PH, CLEAR, LEVELS, INFO, keys, buildLevel, startLevel, startRun, getButtons, clickAt, render, completeLevel, finishGame, toMenu,
   get best(){ return BEST; }, reloadBest(){ BEST = loadBest(); }, updateCamera,
   tick(n, dt){ for (let k = 0; k < (n || 1); k++) update(dt || STEP); }, press(k){ if (k === 'J' && !keys.J) jumpEdge = true; keys[k] = true; }, release(k){ keys[k] = false; } };
 })();
