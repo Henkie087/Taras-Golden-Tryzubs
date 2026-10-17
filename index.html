@@ -122,6 +122,8 @@ const SFX = {
   jump(){ tone(380, 0.16, 'triangle', 0.35, 720); },
   tryzub(){ tone(1046, 0.12, 'triangle', 0.3); tone(1568, 0.22, 'triangle', 0.25, 0, 0.07); },
   bounce(){ tone(320, 0.22, 'sine', 0.45, 980); },
+  honk(){ tone(330, 0.12, 'square', 0.12, 290, 0); tone(330, 0.14, 'square', 0.12, 280, 0.16); },
+  pop(){ [0, 0.05, 0.11, 0.16].forEach((d, k) => tone(700 + k * 180, 0.06, 'triangle', 0.2, 1400, d)); },
   djump(){ tone(600, 0.14, 'triangle', 0.3, 1100); tone(1200, 0.12, 'sine', 0.15, 1600, 0.05); },
   buy(){ [784, 988, 1175, 1568].forEach((f, i) => tone(f, 0.15, 'triangle', 0.3, 0, i * 0.06)); },
   oops(){ tone(660, 0.18, 'triangle', 0.35, 440); tone(520, 0.35, 'triangle', 0.3, 240, 0.15); },
@@ -143,6 +145,10 @@ const PH = { G: 2200, JV: 820, RUN: 270, CROUCH_RUN: 140, ACC: 2400, AIR_ACC: 17
 const CLEAR = 46; // gap under crouch hazards (stand 56 > 46 > crouch 32)
 
 // ================= Levels =================
+// where each level's secret areas sit (fraction of the segment list); empty = no secret in that level
+const SECRET_AT = [[], [0.62], [], [0.58], [], [0.62], [], [0.55], [], [0.6], [0.58], [0.45, 0.75]];
+const SECRET_STYLE = [[], ['bank'], [], ['bush'], [], ['bank'], [], ['bush'], [], ['bank'], ['bush'], ['bank', 'bush']];
+const CRIT_AT = { 5: ['hedgehog'], 7: ['goose'], 9: ['frog'], 10: ['melon'], 11: ['ice', 'corn'] };
 const INFO = [
   ['Sunflower Meadow', 'Соняшникова лука', 'Run, jump and collect golden tryzubs!', 'Бігай, стрибай і збирай золоті тризуби!'],
   ['Golden Wheat Fields', 'Золоті пшеничні поля', 'Low thorny hedges ahead: hold S to crouch!', 'Попереду низькі колючі кущі — затисни S, щоб присісти!'],
@@ -185,7 +191,7 @@ function buildLevel(i){
   const rr = (a, b) => a + R() * (b - a), ri = (a, b) => Math.floor(a + R() * (b - a + 1));
   const d = i / 11;
   const L = { i, name: INFO[i][0], ua: INFO[i][1], tip: INFO[i][2], uaTip: INFO[i][3], tod: TODS[i], ground: [], plats: [], ceil: [], spikes: [], bees: [], logs: [],
-    tryz: [], hearts: [], cps: [], pads: [], floats: [], bonus: [], secrets: [], traps: [], elevs: [], boss: null, path: [], crouch: [], hints: [], flowers: [], goal: null, spawn: { x: 90, gy: 440 } };
+    tryz: [], hearts: [], cps: [], pads: [], floats: [], bonus: [], secrets: [], crit: [], traps: [], elevs: [], boss: null, path: [], crouch: [], hints: [], flowers: [], goal: null, spawn: { x: 90, gy: 440 } };
   const gapMin = 55 + d * 45, gapMax = 95 + d * 75, climb = 55 + d * 45, beeSp = 55 + d * 95, platSp = 45 + d * 100;
   let x = 0, y = 440;
   const clampY = v => clamp(v, 310, 470);
@@ -260,17 +266,32 @@ function buildLevel(i){
     L.bonus.push(b); b.pad = addPad(bx + bw / 2, y, x, w, b); rowT(x + 50, x + 150, y - 42, 2); rowT(x + w - 150, x + w - 50, y - 42, 2);
     if (i === 0 && L.bonus.length === 1) L.hints.push({ x: Math.max(250, x + w / 2 - 320), y: y - 300 < 80 ? 80 : y - 290, t: 'Press W again in the air: DOUBLE JUMP!', ua: 'Натисни W ще раз у повітрі: ПОДВІЙНИЙ СТРИБОК!', dj: true });
     flowers(x, w, y); x += w; };
-  // SECRET: a fake wall (walk-through earth bank or thick bush) under a raised step hides a little cave with treasure
+  // SECRET: a big hidden zone inside a long earth hill. The main route climbs dirt steps and walks over the hill top;
+  // the only way in is a fake wall on the FAR (right) side, so you only find it if you look back. Inside: three floors
+  // of ledges with a reward route (tryzubs, borscht, a bonus tryzub at the far end) and, in the harder levels (L6+),
+  // one special friendly critter that lives nowhere else.
   let secN = 0;
-  S.secret = () => { y = lowTo(400); const wa = 230, fw = 150, top = y - 90; addGround(x, wa, y); flowers(x, wa - 40, y);
-    const cx1 = x + wa; L.ground.push({ x: cx1, y, w: fw, h: 900, cave: true });
-    plat('static', cx1, top, fw, { secret: true }); L.path.push({ type: 'static', x1: cx1, x2: cx1 + fw, y1: top, y2: top });
-    const style = (secN + i) % 2 ? 'bush' : 'bank', items = [];
-    const st = (tx, ty, big) => { const t = { x: tx, y: ty, got: false, ph: R() * 6, secret: true, big: !!big }; L.tryz.push(t); items.push(t); };
-    if (secN % 2 === 0){ st(cx1 + 40, y - 30); st(cx1 + 110, y - 30); } else { st(cx1 + 45, y - 30, true); const h = { x: cx1 + 112, y: y - 28, got: false, ph: R() * 6, secret: true }; L.hearts.push(h); }
-    L.secrets.push({ x1: cx1, x2: cx1 + fw, y1: top + 18, y2: y, style, found: false, reveal: 0, items });
-    rowT(cx1 + 30, cx1 + fw - 30, top - 42, 1);
-    secN++; x = cx1 + fw; y = top; const wb = ri(220, 280); addGround(x, wb, y); flowers(x, wb, y); x += wb; };
+  S.secret = () => { const gy = lowTo(440), R0 = gy - 232, wa = 200, sw = 100, FW = 1500 + i * 50 + secN * 100;
+    addGround(x, wa, gy); flowers(x, wa - 30, gy); x += wa;
+    addGround(x, sw, gy - 77); x += sw; addGround(x, sw, gy - 155); x += sw; addGround(x, 90, R0); x += 90;
+    const cx1 = x, x2 = cx1 + FW; L.ground.push({ x: cx1, y: gy, w: FW, h: 900, cave: true });
+    plat('static', cx1, R0, FW, { secret: true }); L.path.push({ type: 'static', x1: cx1, x2, y1: R0, y2: R0 });
+    for (const u of [0.12, 0.5, 0.86]) rowT(cx1 + FW * u - 140, cx1 + FW * u + 140, R0 - 42, 3);
+    const style = SECRET_STYLE[i][secN] || 'bank', items = [], surf = [{ x1: cx1, x2, y1: gy, y2: gy }];
+    const st = (tx, ty, big) => { const t = { x: Math.round(tx), y: ty, got: false, ph: R() * 6, secret: true, big: !!big }; L.tryz.push(t); items.push(t); };
+    const ledge = (px, py, w) => { px = Math.round(px); plat('static', px, py, w, { zone: true }); surf.push({ x1: px, x2: px + w, y1: py, y2: py }); };
+    const A = gy - 72, B = gy - 140, nA = Math.round(FW / 330), sp = (FW - 420) / (nA - 1);
+    for (let k = 0; k < nA; k++){ const px = cx1 + 120 + k * sp; ledge(px, A, 120); st(px + 60, A - 40); }
+    let hx = 0; for (let k = 0; k < nA - 1; k += 2){ const px = cx1 + 120 + k * sp + 166; ledge(px, B, 120); st(px + 30, B - 40); st(px + 90, B - 40); if (!hx) hx = px + 60; }
+    const h = { x: Math.round(hx), y: B - 40, got: false, ph: R() * 6, secret: true }; L.hearts.push(h); items.push(h);
+    for (let k = 0; k < 3; k++) st(x2 - 150 - k * 60, gy - 30);
+    st(cx1 + 60, gy - 50, true); // the optional bonus tryzub, deepest in the zone
+    const ck = (CRIT_AT[i] || [])[secN], crit = [];
+    if (ck === 'corn'){ for (let k = 1; k < nA - 1; k += 2){ const c = newCrit('corn', 0, 0, gy); c.x = Math.round(cx1 + 120 + k * sp + 120 + (sp - 120) / 2); c.t = (k * 1.1) % 3; crit.push(c); } }
+    else if (ck) crit.push(newCrit(ck, Math.round(cx1 + FW * 0.25), x2 - 420, gy));
+    for (const c of crit) L.crit.push(c);
+    L.secrets.push({ x1: cx1, x2, y1: R0 + 18, y2: gy, style, found: false, reveal: 0, items, surf, crit, kind: ck || null });
+    secN++; x = x2; y = gy; const wb = ri(240, 300); addGround(x, wb, y); flowers(x + 140, wb - 140, y); x += wb; };
   // ---- extra kid-friendly traps (all avoidable by timing, jumping or crouching) ----
   const trap = o => { L.traps.push(Object.assign({ ph: R() * 10 }, o)); };
   S.popspike = () => { const w = ri(380, 440); addGround(x, w, y); const n = i < 4 ? 2 : 3, per = 3.0 - d * 0.6; for (let k = 0; k < n; k++){ const tw = 40 + ri(0, 2) * 10; trap({ kind: 'pop', x: Math.round(x + 70 + k * (w - 160) / Math.max(1, n - 1) - (n === 1 ? 0 : 0)), w: tw, gy: y, per, ph: k * per / n, h: 22 }); }
@@ -292,12 +313,14 @@ function buildLevel(i){
   const pool = []; const add = (t, n) => { for (let k = 0; k < n; k++) pool.push(t); };
   add('gap', 4 + Math.floor(i * 0.6)); add('step', 2 + Math.floor(i / 3)); add('crouch', i ? 2 + Math.floor(i / 2) : 0);
   add('spikes', 3 + Math.floor(i * 0.6)); add('pit', 2 + Math.floor(i * 0.55)); add('log', i >= 1 ? 1 + Math.floor((i - 1) / 3) : 0);
-  add('loop', 1 + Math.floor(i / 3)); add('patrol', 3 + Math.floor(i / 3)); add('flat', 2 + Math.floor(i / 6)); add('bonus', 1 + Math.floor(i / 4)); add('secret', i < 3 ? 1 : 2); add('elev', 1 + Math.floor(i / 3));
+  add('loop', 1 + Math.floor(i / 3)); add('patrol', 3 + Math.floor(i / 3)); add('flat', 2 + Math.floor(i / 6)); add('bonus', 1 + Math.floor(i / 4)); /* secrets are placed separately below */ add('elev', 1 + Math.floor(i / 3));
   add('popspike', i >= 1 ? 1 + Math.floor(i / 4) : 0); add('pendulum', i >= 2 ? 1 + Math.floor((i - 2) / 4) : 0); add('thorn', i >= 3 ? 1 + Math.floor((i - 3) / 4) : 0);
   add('acorn', i >= 4 ? 1 + Math.floor((i - 4) / 4) : 0); add('geyser', i >= 5 ? 1 : 0); add('ram', i >= 6 ? 1 + Math.floor((i - 6) / 3) : 0); add('wind', i >= 7 ? 1 : 0);
   for (let k = pool.length - 1; k > 0; k--){ const j = Math.floor(R() * (k + 1)); [pool[k], pool[j]] = [pool[j], pool[k]]; }
   // gentle opening: first segment is a plain one
   const fi = pool.indexOf('flat'); if (fi > 0){ pool.splice(fi, 1); pool.unshift('flat'); }
+  // secret areas: only in some levels (none in L1), never near the start: well past 35% of the level and after the first checkpoint
+  { const at = SECRET_AT[i]; for (let q = at.length - 1; q >= 0; q--) pool.splice(Math.round((pool.length + at.length) * at[q]) - q, 0, 'secret'); }
 
   addGround(0, 460, 440); rowT(260, 400, 398, 3); flowers(0, 460, 440);
   if (i === 0) L.hints.push({ x: 190, y: 290, t: 'A / D to walk  ·  W to jump', ua: 'A / D — ходити  ·  W — стрибок' });
@@ -339,7 +362,7 @@ function buildLevel(i){
   for (const f of L.floats.slice()) if (f.base - f.y > 115 && !L.floats.some(o => o !== f && o.base === f.base && o.y > f.y && o.y - f.y < 110 && Math.max(o.x1 - f.x2, f.x1 - o.x2) < 60)){
     removeItems(f); L.floats.splice(L.floats.indexOf(f), 1); L.plats.splice(L.plats.indexOf(f.pl), 1); L.pads = L.pads.filter(q => q.under !== f); }
   {
-    const target = Math.round(16 + i * 1.6), bigs = L.tryz.filter(t => t.big || t.secret), rest = L.tryz.filter(t => !t.big && !t.secret);
+    const target = Math.round(16 + i * 1.6), bigs = L.tryz.filter(t => (t.big && !t.secret) || t.elev), rest = L.tryz.filter(t => !t.big && !t.secret);
     const groundAt = x => { let gy = null; for (const g of L.ground) if (x >= g.x && x <= g.x + g.w) gy = gy == null ? g.y : Math.min(gy, g.y); return gy; };
     const hard = t => { const gy = groundAt(t.x); return gy == null ? 220 + R() * 20 : (gy - t.y) + R() * 20; }; // over a gap / pit = hardest, then height above the floor
     rest.forEach(t => t.hv = hard(t));
@@ -375,7 +398,7 @@ const LEVELS = []; for (let i = 0; i < 12; i++) LEVELS.push(buildLevel(i));
 const BONUS = 12;
 function buildBonus(){
   const L = { i: BONUS, world: 11, bonusStage: true, name: 'Bonus: Golden Stork', ua: 'Бонус: Золотий лелека', tip: 'Bonus stage: no checkpoints! Lose all lives and you must beat level 12 again', uaTip: 'Бонусний рівень: без контрольних точок! Втратиш усі життя — проходь 12 рівень знову', tod: 1,
-    ground: [], plats: [], ceil: [], spikes: [], bees: [], logs: [], tryz: [], hearts: [], cps: [], pads: [], floats: [], bonus: [], secrets: [], traps: [], elevs: [], path: [], crouch: [], hints: [], flowers: [], spawn: { x: 120, gy: 440 } };
+    ground: [], plats: [], ceil: [], spikes: [], bees: [], logs: [], tryz: [], hearts: [], cps: [], pads: [], floats: [], bonus: [], secrets: [], crit: [], traps: [], elevs: [], path: [], crouch: [], hints: [], flowers: [], spawn: { x: 120, gy: 440 } };
   const g = (x, w) => { L.ground.push({ x, y: 440, w, h: 900 }); L.path.push({ type: 'ground', x1: x, x2: x + w, y1: 440, y2: 440 }); };
   g(0, 320); g(320, 960); g(1280, 560); L.boss = { x1: 320, x2: 1280, gy: 440 }; L.goal = { x: 1280 + 330, gy: 440 }; L.len = 1840; L.par = 120;
   for (let x = 40; x < 300; x += 70) L.flowers.push({ x, y: 440, h: 40 + (x % 3) * 10, s: 0.4, ph: x }); for (let x = 1320; x < 1800; x += 70) L.flowers.push({ x, y: 440, h: 40 + (x % 3) * 10, s: 0.4, ph: x });
@@ -437,17 +460,17 @@ const ACH = [
   { id: 'first', icon: 'flag', en: 'First Steps', ua: 'Перші кроки', den: 'Finish level 1', dua: 'Пройди рівень 1', test: () => !!lv(0).done },
   { id: 'half', icon: 'flag', en: 'Halfway Home', ua: 'Пів дороги', den: 'Finish level 6', dua: 'Пройди рівень 6', test: () => !!lv(5).done },
   { id: 'hero', icon: 'trophy', en: 'Hero of Ukraine', ua: 'Герой України', den: 'Finish all 12 levels', dua: 'Пройди всі 12 рівнів', test: () => cntLv(l => l.done) >= 12, prog: () => [cntLv(l => l.done), 12] },
-  { id: 'bee10', icon: 'bee', en: 'Bee Bouncer', ua: 'Бджолиний стрибун', den: 'Bop 10 bees', dua: 'Підстрибни на 10 бджіл', test: () => BEST.stats.bees >= 10, prog: () => [BEST.stats.bees, 10] },
-  { id: 'bee50', icon: 'bee', en: 'Bee Whisperer', ua: 'Друг бджіл', den: 'Bop 50 bees', dua: 'Підстрибни на 50 бджіл', test: () => BEST.stats.bees >= 50, prog: () => [BEST.stats.bees, 50] },
-  { id: 'borscht', icon: 'bowl', en: 'Borscht Lover', ua: 'Любитель борщу', den: 'Eat 10 bowls of borscht', dua: 'З’їж 10 мисок борщу', test: () => BEST.stats.borscht >= 10, prog: () => [BEST.stats.borscht, 10] },
-  { id: 'collector', icon: 'tryzub', en: 'Collector', ua: 'Збирач', den: 'Collect every tryzub in a level', dua: 'Збери всі тризуби на рівні', test: () => anyLv(l => l.all) },
-  { id: 'bonus', icon: 'tryzub', en: 'Bonus Hunter', ua: 'Мисливець за бонусами', den: 'Get every bonus tryzub in a level', dua: 'Збери всі бонусні тризуби на рівні', test: () => anyLv(l => l.allBonus) },
-  { id: 'secret1', icon: 'key', en: 'Secret Finder', ua: 'Шукач секретів', den: 'Find a secret area', dua: 'Знайди таємну схованку', test: () => anyLv(l => (l.sec || 0) > 0) },
-  { id: 'secretL', icon: 'key', en: 'Treasure Map', ua: 'Карта скарбів', den: 'Find all secrets in one level', dua: 'Знайди всі секрети на одному рівні', test: () => BEST.levels.some((l, i) => (l.sec || 0) >= LEVELS[i].secrets.length) },
+  { id: 'bee10', icon: 'bee', en: 'Bee Bouncer', ua: 'Бджолиний стрибун', den: 'Bop 25 bees', dua: 'Підстрибни на 25 бджіл', test: () => BEST.stats.bees >= 25, prog: () => [BEST.stats.bees, 25] },
+  { id: 'bee50', icon: 'bee', en: 'Bee Whisperer', ua: 'Друг бджіл', den: 'Bop 100 bees', dua: 'Підстрибни на 100 бджіл', test: () => BEST.stats.bees >= 100, prog: () => [BEST.stats.bees, 100] },
+  { id: 'borscht', icon: 'bowl', en: 'Borscht Lover', ua: 'Любитель борщу', den: 'Eat 15 bowls of borscht', dua: 'З’їж 15 мисок борщу', test: () => BEST.stats.borscht >= 15, prog: () => [BEST.stats.borscht, 15] },
+  { id: 'collector', icon: 'tryzub', en: 'Collector', ua: 'Збирач', den: 'Collect every tryzub in 3 different levels', dua: 'Збери всі тризуби на 3 різних рівнях', test: () => cntLv(l => l.all) >= 3, prog: () => [cntLv(l => l.all), 3] },
+  { id: 'bonus', icon: 'tryzub', en: 'Bonus Hunter', ua: 'Мисливець за бонусами', den: 'Get every bonus tryzub in 6 different levels', dua: 'Збери всі бонусні тризуби на 6 різних рівнях', test: () => cntLv(l => l.allBonus) >= 6, prog: () => [cntLv(l => l.allBonus), 6] },
+  { id: 'secret1', icon: 'key', en: 'Secret Finder', ua: 'Шукач секретів', den: 'Find 3 secret areas', dua: 'Знайди 3 таємні схованки', test: () => secTotal() >= 3, prog: () => [Math.min(secTotal(), 3), 3] },
+  { id: 'secretL', icon: 'key', en: 'Treasure Map', ua: 'Карта скарбів', den: 'Find every secret in 2 different levels', dua: 'Знайди всі секрети на 2 різних рівнях', test: () => secFullLv() >= 2, prog: () => [Math.min(secFullLv(), 2), 2] },
   { id: 'secretAll', icon: 'key', en: 'Great Explorer', ua: 'Великий дослідник', den: 'Find every secret in the game', dua: 'Знайди всі секрети в грі', test: () => BEST.levels.every((l, i) => (l.sec || 0) >= LEVELS[i].secrets.length), prog: () => [BEST.levels.reduce((a, l, i) => a + Math.min(l.sec || 0, LEVELS[i].secrets.length), 0), LEVELS.reduce((a, L) => a + L.secrets.length, 0)] },
-  { id: 'noOops', icon: 'heart', en: 'No Oops', ua: 'Без «Ой!»', den: 'Finish a level without an Oops', dua: 'Пройди рівень без жодного «Ой!»', test: () => anyLv(l => l.noOops) },
-  { id: 'bouncy', icon: 'spring', en: 'Boing Boing', ua: 'Стриб-скок', den: 'Bounce on springs 25 times', dua: 'Підстрибни на пружинах 25 разів', test: () => BEST.stats.bounces >= 25, prog: () => [BEST.stats.bounces, 25] },
-  { id: 'flags', icon: 'flag', en: 'Flag Bearer', ua: 'Прапороносець', den: 'Raise 10 checkpoint flags', dua: 'Підніми 10 прапорців', test: () => BEST.stats.flags >= 10, prog: () => [BEST.stats.flags, 10] },
+  { id: 'noOops', icon: 'heart', en: 'No Oops', ua: 'Без «Ой!»', den: 'Finish level 5 or later without a single Oops', dua: 'Пройди рівень 5 або пізніший без жодного «Ой!»', test: () => BEST.levels.some((l, i) => i >= 4 && l.done && l.noOops) },
+  { id: 'bouncy', icon: 'spring', en: 'Boing Boing', ua: 'Стриб-скок', den: 'Bounce on springs 60 times', dua: 'Підстрибни на пружинах 60 разів', test: () => BEST.stats.bounces >= 60, prog: () => [BEST.stats.bounces, 60] },
+  { id: 'flags', icon: 'flag', en: 'Flag Bearer', ua: 'Прапороносець', den: 'Raise 20 checkpoint flags', dua: 'Підніми 20 прапорців', test: () => BEST.stats.flags >= 20, prog: () => [BEST.stats.flags, 20] },
   { id: 'fashion', icon: 'shirt', en: 'Fashionista', ua: 'Модник', den: 'Buy 5 wardrobe items', dua: 'Купи 5 речей у гардеробі', test: () => boughtCos() >= 5, prog: () => [boughtCos(), 5] },
   { id: 'upgraded', icon: 'arrow', en: 'Fully Upgraded', ua: 'Усе прокачано', den: 'Max out every upgrade', dua: 'Прокачай усі покращення до максимуму', test: () => UPG.every(u => BEST.up[u.id] >= 3) },
   { id: 'rich', icon: 'tryzub', en: 'Piggy Bank', ua: 'Скарбничка', den: 'Have 300 tryzubs in the wallet', dua: 'Май 300 тризубів у гаманці', test: () => BEST.wallet >= 300, prog: () => [Math.min(BEST.wallet, 300), 300] },
@@ -457,6 +480,18 @@ const ACH = [
   { id: 't9', icon: 'clock', en: 'Pond Racer', ua: 'Ставковий гонщик', den: 'Finish level 9 in under ' + fmtTime(SPEED[8]).replace('.0', ''), dua: 'Пройди рівень 9 швидше за ' + fmtTime(SPEED[8]).replace('.0', ''), test: () => lv(8).time != null && lv(8).time < SPEED[8], li: 8 },
   { id: 't12', icon: 'clock', en: 'Kyiv Express', ua: 'Київський експрес', den: 'Finish level 12 in under ' + fmtTime(SPEED[11]).replace('.0', ''), dua: 'Пройди рівень 12 швидше за ' + fmtTime(SPEED[11]).replace('.0', ''), test: () => lv(11).time != null && lv(11).time < SPEED[11], li: 11 }
 ];
+// tryzub total shown to the player: leaves out items inside secret areas that are not found yet (so totals never give a secret away)
+function bigShown(L){ return L.tryz.filter(q => q.big && !L.secrets.some(s => !s.found && s.items.includes(q))).length; } // bonus tryzubs in unfound secrets stay unannounced
+function tzShown(L){ let n = L.tryz.length; for (const s of L.secrets) if (!s.found) n -= s.items.filter(t => L.tryz.includes(t)).length; return n; }
+function secTotal(){ return BEST.levels.reduce((a, l, i) => a + Math.min(l.sec || 0, LEVELS[i].secrets.length), 0); }
+function secFullLv(){ return BEST.levels.filter((l, i) => LEVELS[i].secrets.length > 0 && (l.sec || 0) >= LEVELS[i].secrets.length).length; } // only levels that actually have secrets count
+// rules changed (harder achievements): on load, re-check every unlocked badge against the current rules and re-lock the ones that no longer qualify
+const ACH_RULES = 4, SECRET_LAYOUT = 2;
+function recheckAch(){ if (BEST.achRules === ACH_RULES && BEST.secLayout === SECRET_LAYOUT) return 0; let n = 0;
+  // secret areas were redesigned: old per-level 'secrets found' counts refer to secrets that no longer exist
+  if (BEST.secLayout !== SECRET_LAYOUT){ for (const l of BEST.levels) if (l) l.sec = 0; BEST.secLayout = SECRET_LAYOUT; }
+  for (const a of ACH) if (BEST.ach[a.id]){ let ok = false; try { ok = a.test(); } catch (e){} if (!ok){ delete BEST.ach[a.id]; n++; } } BEST.achRules = ACH_RULES; saveBest(); return n; }
+
 let achQueue = [];
 function boughtCos(){ return BEST.cos.owned.filter(k => { const [c, id] = k.split(':'); const cat = COS.find(q => q.id === c); const it = cat && cat.items.find(q => q.id === id); return it && it.cost > 0; }).length; }
 function checkAch(){ let n = 0; for (const a of ACH) if (!BEST.ach[a.id] && a.test()){ BEST.ach[a.id] = Date.now(); achQueue.push(a); n++; } if (n){ saveBest(); try { SFX.ach(); } catch (e){} } return n; }
@@ -632,6 +667,7 @@ function hurt(kind, srcX){
 
 function updateWorld(dt){
   const L = G.L; G.T += dt;
+  updCrit(dt);
   for (const pl of L.plats){
     const ox = pl.x, oy = pl.y;
     if (pl.kind === 'move') pl.x = pl.x0 + pl.A * Math.sin(G.T * pl.om + pl.ph);
@@ -672,6 +708,7 @@ function interact(dt){
   for (const s of L.secrets){ s.inside = cx > s.x1 + 6 && cx < s.x2 && cy > s.y1 && cy < s.y2 + 4;
     if (s.inside && !s.found){ s.found = true; G.secFound++; SFX.secret(); spark(cx, cy - 10, 26, '#FFFFFF'); spark(cx, cy - 10, 16, '#FFD500'); G.secretBan = 1.6; G.bonusBan = 0; achEvent('secret'); } }
   if (P.inv <= 0){ const q = trapHits(); if (q){ const sp = trapSpan(q); hurt('trap', q.kind === 'swing' || q.kind === 'drop' || q.kind === 'ram' ? trapHitX(q) : (sp[0] + sp[1]) / 2); return; } }
+  if (critHits(dt)) return;
   if (cx > L.goal.x && (!G.stork || G.stork.done)){ completeLevel(); return; }
   // bees: bounce from above, otherwise soft hurt
   for (const b of L.bees){
@@ -700,9 +737,9 @@ function completeLevel(){
   const score = levelLiveScore() + bonus;
   G.runScores[G.li] = score; G.runTimes[G.li] = t;
   const b = BEST.levels[G.li]; const nbS = b.score == null || score > b.score, nbT = b.time == null || t < b.time;
-  if (nbS) b.score = score; if (nbT) b.time = t; b.done = true; if (G.tz >= L.tryz.length) b.all = true; const nbig = L.tryz.filter(q => q.big).length; if (nbig && G.bigTz >= nbig) b.allBonus = true; if (!G.oopsN) b.noOops = true; b.sec = Math.max(b.sec || 0, G.secFound); saveBest();
+  if (nbS) b.score = score; if (nbT) b.time = t; b.done = true; if (G.tz >= L.tryz.length) b.all = true; const mainBig = L.tryz.filter(q => q.big && !q.secret), nbig = mainBig.length; if (nbig && mainBig.every(q => q.got)) b.allBonus = true; /* secret-zone bonus tryzubs are an extra treat, not needed for Bonus Hunter */ if (!G.oopsN) b.noOops = true; b.sec = Math.max(b.sec || 0, G.secFound); saveBest();
   BEST.unlocked = Math.max(BEST.unlocked || 0, Math.min(11, G.li + 1)); saveBest(); checkAch();
-  G.result = { t, tz: G.tz, tot: L.tryz.length, big: G.bigTz, nbig, sec: G.secFound, nsec: L.secrets.length, bees: G.bees, bonus, score, nbS, nbT };
+  G.result = { t, tz: G.tz, tot: tzShown(L), big: G.bigTz, nbig: bigShown(L), sec: G.secFound, nsec: L.secrets.length, bees: G.bees, bonus, score, nbS, nbT };
   G.state = 'complete'; G.focus = 0; SFX.win(); petals(50);
 }
 function finishGame(){
@@ -853,6 +890,139 @@ function placeHints(L){ const obs = hintObstacles(L);
     outer: for (const dy of [0, -30, 30, -60, 60]) for (const dx of [...Array(40).keys()].map(k => -(k + 1) * 20).concat([...Array(25).keys()].map(k => (k + 1) * 20))){
       h.x = Math.max(160, x0 + dx); h.y = y0 + dy; if (!hintClashes(L, h, obs).length){ ok = true; break outer; } }
     if (!ok){ h.x = x0; h.y = y0; } } }
+
+// ---------- secret-zone critters: cute, friendly, clearly telegraphed, avoidable with normal moves ----------
+// Each one lives in exactly one hard-level secret and nowhere in the normal levels.
+const CRIT_INFO = {
+  hedgehog: ['Rolling hedgehog', 'Їжачок-клубочок', 'Spiky! Jump over it', 'Колючий! Перестрибни'],
+  goose: ['Grumpy goose', 'Сердитий гусак', 'Hop on it or jump over', 'Стрибни зверху або перестрибни'],
+  frog: ['Hoppy frog', 'Жабка-стрибунка', 'Hop on it or slip past', 'Стрибни зверху або прошмигни'],
+  melon: ['Rolling watermelon', 'Кавун-колобок', 'Jump over it', 'Перестрибни'],
+  ice: ['Sliding ice block', 'Ковзка крижинка', 'Jump over or ride on top', 'Перестрибни або катайся зверху'],
+  corn: ['Popping corn', 'Кукурудза-хлопавка', 'Wait for the pop, then run', 'Зачекай «пах!» і біжи']
+};
+const CORN_PER = 3.0, CORN_IDLE = 1.5, CORN_SHAKE = 0.8;
+function newCrit(kind, x0, x1, gy){ return { kind, x0, x1, gy, x: x1, y: gy, vx: 0, vy: 0, dir: -1, t: kind === 'melon' ? 0.8 : 0, st: kind === 'melon' ? 'wob' : kind === 'frog' ? 'sit' : 'go', rot: 0, dead: false, honk: 0 }; }
+function cornPhase(c){ const u = ((c.t % CORN_PER) + CORN_PER) % CORN_PER; return u < CORN_IDLE ? 'idle' : u < CORN_IDLE + CORN_SHAKE ? 'shake' : 'pop'; }
+function critBox(c){
+  switch (c.kind){
+    case 'hedgehog': return { x: c.x - 19, y: c.y - 32, w: 38, h: 32 };
+    case 'goose': return { x: c.x - 15, y: c.y - 44, w: 30, h: 44 };
+    case 'frog': return { x: c.x - 14, y: c.y - 22, w: 28, h: 22 };
+    case 'melon': return c.st === 'gone' ? null : { x: c.x - 15, y: c.y - 30, w: 30, h: 30 };
+    case 'ice': return { x: c.x - 22, y: c.y - 36, w: 44, h: 36 };
+    case 'corn': return cornPhase(c) === 'pop' ? { x: c.x - 22, y: c.gy - 130, w: 44, h: 130 } : null;
+  }
+  return null;
+}
+function updCrit(dt){
+  const L = G.L, px = P.x + P.w / 2;
+  for (const c of L.crit || []){ if (c.dead) continue;
+    if (c.kind === 'corn'){ const was = cornPhase(c); c.t += dt; const now = cornPhase(c); if (was !== 'pop' && now === 'pop' && Math.abs(px - c.x) < 560){ SFX.pop ? SFX.pop() : SFX.bounce(); } continue; }
+    if (c.kind === 'hedgehog' || c.kind === 'goose' || c.kind === 'ice'){
+      const v = c.kind === 'hedgehog' ? 120 : c.kind === 'goose' ? 55 : 150, rest = c.kind === 'hedgehog' ? 0.9 : 0.6;
+      if (c.st === 'go'){ c.x += c.dir * v * dt; c.rot += c.dir * v * dt / 13;
+        if (c.x <= c.x0 || c.x >= c.x1){ c.x = clamp(c.x, c.x0, c.x1); c.st = 'rest'; c.t = rest;
+          if (c.kind === 'goose' && Math.abs(px - c.x) < 520){ c.honk = 0.7; SFX.honk ? SFX.honk() : SFX.bounce(); ftext(c.x, c.y - 70, 'Honk! · Ґа-ґа!', '#FFF3A0'); } } }
+      else { c.t -= dt; if (c.t <= 0){ c.dir = -c.dir; c.st = 'go'; } }
+      if (c.honk > 0) c.honk -= dt; continue; }
+    if (c.kind === 'frog'){
+      if (c.st === 'sit'){ c.t -= dt; if (c.t <= 0){ if ((c.dir < 0 && c.x - 110 < c.x0) || (c.dir > 0 && c.x + 110 > c.x1)) c.dir = -c.dir; c.st = 'hop'; c.vy = -460; c.vx = c.dir * 115; } }
+      else { c.vy += PH.G * dt; c.x += c.vx * dt; c.y += c.vy * dt; if (c.y >= c.gy){ c.y = c.gy; c.st = 'sit'; c.t = 1.1; } } continue; }
+    if (c.kind === 'melon'){
+      if (c.st === 'wob'){ c.t -= dt; if (c.t <= 0){ c.st = 'roll'; } }
+      else if (c.st === 'roll'){ c.x -= 170 * dt; c.rot -= 170 * dt / 15; if (c.x <= c.x0){ c.st = 'gone'; c.t = 1.0; if (Math.abs(px - c.x) < 600) poof(c.x, c.y - 15); } }
+      else { c.t -= dt; if (c.t <= 0){ c.x = c.x1; c.st = 'wob'; c.t = 0.8; } } }
+  }
+}
+// returns true when Taras got bumped (the caller stops this frame's checks)
+function critHits(dt){
+  for (const c of G.L.crit || []){ if (c.dead) continue; const b = critBox(c); if (!b || !overlap(P, b)) continue;
+    const prevBottom = P.y + P.h - P.vy * dt;
+    if ((c.kind === 'goose' || c.kind === 'frog' || c.kind === 'ice') && P.vy > 0 && prevBottom <= b.y + 8){
+      P.vy = -(inJ() ? PH.JV * 0.95 : PH.JV * 0.7); P.jumping = inJ(); P.onGround = false; SFX.bounce();
+      if (c.kind === 'ice'){ spark(c.x, b.y, 8, '#E3F6FF'); ftext(c.x, b.y - 20, 'Wheee! · Ух!', '#E3F6FF'); }
+      else { c.dead = true; poof(c.x, c.y - 16); spark(c.x, c.y - 16, 8, '#FFFFFF'); G.extraPts = (G.extraPts || 0) + 100; ftext(c.x, c.y - 50, 'Poof! · Пуф! +100', '#FFF3A0'); }
+      continue; }
+    if (P.inv <= 0){ hurt('trap', b.x + b.w / 2); return true; }
+  }
+  return false;
+}
+function drawCrit(c, cr, t){
+  if (cr.dead) return; const x = cr.x, y = cr.y;
+  c.save(); c.lineJoin = 'round';
+  const eye = (ex, ey, r) => { c.fillStyle = '#FFFFFF'; c.beginPath(); c.arc(ex, ey, r, 0, 7); c.fill(); c.fillStyle = '#2B1B10'; c.beginPath(); c.arc(ex + 0.6, ey + 0.4, r * 0.55, 0, 7); c.fill(); };
+  switch (cr.kind){
+    case 'hedgehog': { c.translate(x, y); c.scale(1.3, 1.3); c.translate(-x, -y);
+      if (cr.st === 'go'){ // a rolling spiky ball
+        c.translate(x, y - 13); c.rotate(cr.rot); c.fillStyle = '#5D4037'; c.beginPath(); for (let k = 0; k < 16; k++){ const a = k / 16 * 6.283, r = k % 2 ? 11 : 16; c.lineTo(Math.cos(a) * r, Math.sin(a) * r); } c.closePath(); c.fill();
+        c.fillStyle = '#8D6E63'; c.beginPath(); c.arc(0, 0, 10, 0, 7); c.fill(); c.fillStyle = '#D7B48A'; c.beginPath(); c.arc(4, 3, 5, 0, 7); c.fill();
+      } else { // uncurled and looking around: the telegraph that it is about to roll back
+        const f = -cr.dir; c.translate(x, y); c.scale(f, 1); c.fillStyle = '#5D4037'; c.beginPath(); for (let k = 0; k <= 10; k++){ const a = Math.PI + k / 10 * Math.PI * 0.85, r = k % 2 ? 13 : 19; c.lineTo(-3 + Math.cos(a) * r, -6 + Math.sin(a) * r); } c.lineTo(8, -2); c.closePath(); c.fill();
+        c.fillStyle = '#D7B48A'; c.beginPath(); c.ellipse(6, -8, 10, 7, 0, 0, 7); c.fill(); c.beginPath(); c.ellipse(15, -7, 5, 3.5, 0, 0, 7); c.fill();
+        c.fillStyle = '#2B1B10'; c.beginPath(); c.arc(20, -7, 2.2, 0, 7); c.fill(); c.beginPath(); c.arc(9, -11, 1.8, 0, 7); c.fill();
+        c.fillStyle = 'rgba(240,120,120,.6)'; c.beginPath(); c.arc(8, -5, 2.2, 0, 7); c.fill();
+        c.fillStyle = '#4E342E'; c.fillRect(-6, -2, 4, 3); c.fillRect(4, -2, 4, 3); }
+      break; }
+    case 'goose': {
+      const f = cr.dir, step = cr.st === 'go' ? Math.sin(t * 12) : 0; c.translate(x, y); c.scale(f, 1);
+      c.strokeStyle = '#F57C00'; c.lineWidth = 3; c.beginPath(); c.moveTo(-4, -8); c.lineTo(-4 + step * 3, 0); c.moveTo(4, -8); c.lineTo(4 - step * 3, 0); c.stroke();
+      c.fillStyle = '#FFFFFF'; c.strokeStyle = '#B0BEC5'; c.lineWidth = 1.5; c.beginPath(); c.ellipse(-2, -16, 15, 10, -0.1, 0, 7); c.fill(); c.stroke();
+      c.fillStyle = '#ECEFF1'; c.beginPath(); c.ellipse(-6, -17, 8, 5, -0.3, 0, 7); c.fill();
+      const hk = cr.honk > 0 ? Math.sin(cr.honk * 30) * 2 : 0; c.fillStyle = '#FFFFFF'; c.beginPath(); c.moveTo(6, -20); c.quadraticCurveTo(14, -30, 9, -38 + hk); c.lineTo(15, -40 + hk); c.quadraticCurveTo(20, -28, 12, -18); c.closePath(); c.fill(); c.stroke();
+      c.beginPath(); c.arc(12, -40 + hk, 6, 0, 7); c.fill(); c.stroke();
+      c.fillStyle = '#FF9800'; c.beginPath(); c.moveTo(17, -42 + hk); c.lineTo(25, -40 + hk - (cr.honk > 0 ? 2 : 0)); c.lineTo(17, -37 + hk); c.closePath(); c.fill();
+      if (cr.honk > 0){ c.beginPath(); c.moveTo(17, -38 + hk); c.lineTo(24, -35 + hk); c.lineTo(17, -36 + hk); c.closePath(); c.fill(); }
+      c.fillStyle = '#2B1B10'; c.beginPath(); c.arc(13, -42 + hk, 1.6, 0, 7); c.fill(); c.strokeStyle = '#2B1B10'; c.lineWidth = 1.6; c.beginPath(); c.moveTo(10, -46 + hk); c.lineTo(16, -44.5 + hk); c.stroke(); // grumpy brow
+      break; }
+    case 'frog': {
+      const f = cr.dir, puff = cr.st === 'sit' && cr.t < 0.45 ? (Math.sin(t * 22) + 1) * 2.5 : 0, stretch = cr.st === 'hop' ? 1.15 : 1;
+      c.translate(x, y); c.scale(f, 1);
+      c.fillStyle = '#7CB342'; c.beginPath(); c.ellipse(-8, -4, 7, 4, 0, 0, 7); c.fill(); c.beginPath(); c.ellipse(8, -4, 7, 4, 0, 0, 7); c.fill();
+      c.fillStyle = '#8BC34A'; c.beginPath(); c.ellipse(0, -11 * stretch, 13, 10 / stretch, 0, 0, 7); c.fill();
+      if (puff){ c.fillStyle = '#F1F8E9'; c.beginPath(); c.ellipse(6, -6, 5 + puff, 3.5 + puff * 0.6, 0, 0, 7); c.fill(); }
+      eye(-4, -21 * stretch, 4); eye(6, -21 * stretch, 4);
+      c.strokeStyle = '#33691E'; c.lineWidth = 1.5; c.beginPath(); c.arc(3, -12, 5, 0.2, 2.6); c.stroke();
+      break; }
+    case 'melon': {
+      if (cr.st === 'gone') break; const wob = cr.st === 'wob' ? Math.sin(t * 26) * 0.18 : 0;
+      c.translate(x, y - 15); c.rotate(cr.rot + wob); c.fillStyle = '#43A047'; c.beginPath(); c.arc(0, 0, 15, 0, 7); c.fill();
+      c.strokeStyle = '#1B5E20'; c.lineWidth = 2.6; for (let k = -2; k <= 2; k++){ c.beginPath(); c.ellipse(0, 0, Math.abs(k) * 4 + 1, 15, 0, k < 0 ? Math.PI / 2 : -Math.PI / 2, k < 0 ? Math.PI * 1.5 : Math.PI / 2); c.stroke(); }
+      c.fillStyle = 'rgba(255,255,255,.35)'; c.beginPath(); c.ellipse(-5, -7, 4, 2.5, -0.6, 0, 7); c.fill();
+      if (cr.st === 'wob'){ c.rotate(-cr.rot - wob); c.fillStyle = '#FFE16B'; c.font = font(16); c.textAlign = 'center'; c.fillText('!', 0, -22); }
+      break; }
+    case 'ice': {
+      const sh = cr.st === 'rest' ? Math.sin(t * 40) * 1.2 : 0; c.translate(x + sh, y);
+      c.fillStyle = 'rgba(179,229,252,.95)'; rrect(c, -22, -36, 44, 36, 7); c.fill(); c.strokeStyle = '#4FC3F7'; c.lineWidth = 2; c.stroke();
+      c.fillStyle = 'rgba(255,255,255,.75)'; c.fillRect(-16, -31, 14, 4); c.fillRect(-16, -25, 6, 3);
+      c.fillStyle = '#01579B'; c.beginPath(); c.arc(-6, -18, 2.2, 0, 7); c.fill(); c.beginPath(); c.arc(6, -18, 2.2, 0, 7); c.fill();
+      c.strokeStyle = '#01579B'; c.lineWidth = 1.5; c.beginPath(); c.arc(0, -14, 4, 0.3, 2.8); c.stroke();
+      break; }
+    case 'corn': {
+      const ph = cornPhase(cr), u = ((cr.t % CORN_PER) + CORN_PER) % CORN_PER, sh = ph === 'shake' ? Math.sin(t * 50) * 2.5 : 0;
+      if (ph === 'pop'){ const k = (u - CORN_IDLE - CORN_SHAKE) / (CORN_PER - CORN_IDLE - CORN_SHAKE), hh = 130 * Math.min(1, k * 4) * (k > 0.8 ? (1 - k) * 5 : 1);
+        c.fillStyle = 'rgba(255,248,225,.35)'; rrect(c, x - 22, cr.gy - hh, 44, hh, 14); c.fill();
+        for (let q = 0; q < 12; q++){ const qy = cr.gy - 10 - ((q * 37 + u * 260) % Math.max(10, hh)), qx = x + Math.sin(q * 2.3 + u * 6) * 14; c.fillStyle = q % 3 ? '#FFFDE7' : '#FFF59D'; c.beginPath(); c.arc(qx, qy, 5, 0, 7); c.arc(qx + 4, qy - 2, 4, 0, 7); c.arc(qx - 3, qy - 3, 3.5, 0, 7); c.fill(); } }
+      c.translate(x + sh, cr.gy); c.fillStyle = '#7CB342'; c.beginPath(); c.moveTo(-4, 0); c.quadraticCurveTo(-16, -10, -12, -22); c.quadraticCurveTo(-8, -10, 0, -2); c.fill(); c.beginPath(); c.moveTo(4, 0); c.quadraticCurveTo(16, -10, 12, -22); c.quadraticCurveTo(8, -10, 0, -2); c.fill();
+      c.fillStyle = '#FBC02D'; c.beginPath(); c.ellipse(0, -14, 6, 14, 0, 0, 7); c.fill(); c.fillStyle = '#F9A825'; for (let r = 0; r < 5; r++) for (let q = -1; q <= 1; q++){ c.beginPath(); c.arc(q * 3, -22 + r * 4, 1.2, 0, 7); c.fill(); }
+      if (ph === 'shake'){ c.fillStyle = '#FFE16B'; c.font = font(16); c.textAlign = 'center'; c.fillText('!', 0, -34); }
+      break; }
+  }
+  c.restore();
+}
+// bilingual name tag over each critter, shown inside a found secret while Taras is near
+function drawCritTag(c, s, cr, t, cam){
+  if (cr.dead || s.reveal < 0.5) return; const px = P.x + P.w / 2; if (Math.abs(px - cr.x) > 520 || (cr.kind === 'corn' && s.crit[0] !== cr)) return;
+  const inf = CRIT_INFO[cr.kind], ty = cr.gy + 38 /* a little plaque set into the soil under the floor: never covers Taras, ledges or tryzubs */; let tx = cr.kind === 'corn' ? cr.x : (cr.x0 + cr.x1) / 2;
+  c.save(); c.textAlign = 'center';
+  c.font = font(G.touch ? 14 : 15); const w1 = c.measureText(inf[0] + ' · ' + inf[1]).width; c.font = font(G.touch ? 12 : 13, false); const w2 = c.measureText(inf[2] + ' · ' + inf[3]).width; const w = Math.max(w1, w2) + 22;
+  const lo = Math.max(s.x1, cam) + w / 2 + 12, hi = Math.min(s.x2, cam + W) - w / 2 - 12; tx = clamp(tx, lo, hi);
+  if (G.touch){ const a = cam + 280 + w / 2, b = cam + 690 - w / 2; tx = a <= b ? clamp(tx, a, b) : cam + 485; } // stay clear of the on-screen touch buttons
+  cr.tagX = cr.tagX == null || Math.abs(cr.tagX - tx) > 600 ? tx : approach(cr.tagX, tx, 14); tx = cr.tagX; c.globalAlpha = Math.min(1, (s.reveal - 0.5) * 2);
+  c.fillStyle = 'rgba(255,255,255,.9)'; rrect(c, tx - w / 2, ty - 18, w, 42, 10); c.fill(); c.strokeStyle = '#0057B7'; c.lineWidth = 2; c.stroke();
+  c.fillStyle = '#0D3B66'; c.font = font(G.touch ? 14 : 15); c.fillText(inf[0] + ' · ' + inf[1], tx, ty); c.fillStyle = '#5D4037'; c.font = font(G.touch ? 12 : 13, false); c.fillText(inf[2] + ' · ' + inf[3], tx, ty + 17);
+  c.restore();
+}
 // ================= Pre-rendered sprites =================
 function mk(w, h, f){ const c = document.createElement('canvas'); c.width = w; c.height = h; f(c.getContext('2d'), w, h); return c; }
 const SUN_HEAD = mk(100, 100, c => {
@@ -1470,33 +1640,36 @@ function drawWeather(c, camX, t){
   if (TH.weather === 'snow'){ c.fillStyle = 'rgba(255,255,255,.9)'; for (let k = 0; k < 70; k++){ const x = ((hash(k) * W + Math.sin(t * 0.8 + k) * 20 - camX * 0.3) % (W + 40) + W + 40) % (W + 40) - 20, y = ((hash(k + 9) * H + t * (30 + hash(k + 3) * 30)) % (H + 40)) - 20; c.beginPath(); c.arc(x, y, 1.5 + hash(k + 5) * 2, 0, 7); c.fill(); } }
   else if (TH.weather === 'petals'){ for (let k = 0; k < 26; k++){ const x = ((hash(k) * W - t * 30 - camX * 0.3) % (W + 40) + W + 40) % (W + 40) - 20, y = ((hash(k + 9) * H + t * (25 + hash(k + 3) * 20)) % (H + 40)) - 20; c.save(); c.translate(x, y); c.rotate(t * 2 + k); c.fillStyle = k % 3 ? '#F9C9DA' : '#FFFFFF'; c.beginPath(); c.ellipse(0, 0, 4, 2.4, 0, 0, 7); c.fill(); c.restore(); } }
 }
-// ---------- secret caves behind fake walls ----------
-function drawSecretCave(c, s){
+// ---------- secret zones inside earth hills (fake wall on the far side) ----------
+function drawSecretCave(c, s, t){
   const x = s.x1, w = s.x2 - s.x1, y1 = s.y1 - 18, y2 = s.y2;
   const g = c.createLinearGradient(0, y1, 0, y2); g.addColorStop(0, '#3B2614'); g.addColorStop(1, '#5A3A1E'); c.fillStyle = g; c.fillRect(x, y1, w, y2 - y1 + 2);
-  c.fillStyle = 'rgba(255,220,120,.18)'; c.beginPath(); c.ellipse(x + w / 2, y2 - 20, w * 0.45, 26, 0, 0, 7); c.fill();
-  c.fillStyle = '#6E4A2A'; for (let k = 0; k < 6; k++){ c.beginPath(); c.ellipse(x + 12 + k * 26, y2 - 3, 9, 4, 0, 0, 7); c.fill(); }
-  // little lantern-like glow worms
-  c.fillStyle = '#FFE36B'; for (let k = 0; k < 4; k++){ c.beginPath(); c.arc(x + 20 + k * 36, y1 + 14 + (k % 2) * 8, 1.8, 0, 7); c.fill(); }
+  // deterministic décor seeded by the zone's world position: roots, stones, warm lantern glows and glow worms
+  for (let k = 0, n = Math.floor(w / 170); k < n; k++){ const lx = x + 85 + k * 170, sd = x * 0.013 + k * 7.1;
+    c.fillStyle = 'rgba(255,220,120,.10)'; c.beginPath(); c.ellipse(lx, y2 - 24, 70, 24, 0, 0, 7); c.fill();
+    c.strokeStyle = 'rgba(120,80,40,.7)'; c.lineWidth = 2; c.beginPath(); c.moveTo(lx - 30 + hash(sd) * 20, y1 + 18); c.quadraticCurveTo(lx - 10, y1 + 40 + hash(sd + 1) * 20, lx + hash(sd + 2) * 30, y1 + 56 + hash(sd + 3) * 30); c.stroke();
+    c.fillStyle = '#6E4A2A'; c.beginPath(); c.ellipse(lx + hash(sd + 4) * 60 - 30, y2 - 3, 10 + hash(sd + 5) * 6, 4, 0, 0, 7); c.fill();
+    if (k % 2 === 0){ const ly = y1 + 30; c.strokeStyle = '#2B1B10'; c.lineWidth = 1.5; c.beginPath(); c.moveTo(lx, y1 + 18); c.lineTo(lx, ly - 8); c.stroke(); c.fillStyle = 'rgba(255,214,90,.25)'; c.beginPath(); c.arc(lx, ly, 16, 0, 7); c.fill(); c.fillStyle = '#FFD54F'; rrect(c, lx - 5, ly - 8, 10, 14, 3); c.fill(); c.fillStyle = '#E65100'; c.fillRect(lx - 5, ly - 9, 10, 2); }
+    c.fillStyle = '#FFE36B'; c.beginPath(); c.arc(lx + 40 + hash(sd + 6) * 40, y1 + 24 + hash(sd + 7) * 26, 1.8, 0, 7); c.fill(); }
+  // the grass edge on top always looks solid (it is the hill top you walk on); drawn before Taras so he walks on it, not in it
+  const col = { x, y: y1, w }; c.save(); c.beginPath(); c.rect(x, y1 - 14, w, 32); c.clip(); drawGround(c, col); c.restore();
 }
 function drawSecretWall(c, s, t){
-  const x = s.x1, w = s.x2 - s.x1, top = s.y1 - 18, y2 = s.y2;
+  const x = s.x1, w = s.x2 - s.x1, top = s.y1 - 18, y2 = s.y2, x2 = s.x2;
   const a = 1 - 0.72 * s.reveal, col = { x, y: top, w };
-  // the fake wall is the very same dirt step as its neighbours (same style, flush grass edge), clipped so nothing bleeds over the seams
-  c.save(); c.beginPath(); c.rect(x, top - 12, w, H + 60 - top); c.clip();
+  // the hill's front: the very same dirt as its neighbours, drawn below the walkable top edge so it never covers Taras up there
+  c.save(); c.beginPath(); c.rect(x, top + 18, w, H + 60 - top); c.clip();
   c.save(); c.globalAlpha = a; drawGround(c, col);
-  if (s.style === 'bush'){ // a hedge growing in a doorway of the step: the hint
-    const dx = x + 14, dw = w - 28, dy = top + 26; c.fillStyle = 'rgba(40,22,8,.35)'; rrect(c, dx - 3, dy - 3, dw + 6, y2 - dy + 6, 14); c.fill();
+  if (s.style === 'bush'){ // a hedge growing in a doorway at the far (right) end: the hint
+    const dw = 104, dx = x2 - dw - 12, dy = top + 52; c.fillStyle = 'rgba(40,22,8,.35)'; rrect(c, dx - 3, dy - 3, dw + 6, y2 - dy + 6, 14); c.fill();
     c.save(); c.beginPath(); rrect(c, dx, dy, dw, y2 - dy + 4, 12); c.clip(); c.fillStyle = TH.snow ? '#5E8C6E' : '#2F7D32'; c.fillRect(dx, dy, dw, y2 - dy + 4);
     for (let yy = dy + 8; yy < y2 + 4; yy += 15) for (let k = 0; k <= dw; k += 17){ c.fillStyle = (k + yy) % 34 < 17 ? (TH.snow ? '#6F9C7E' : '#388E3C') : (TH.snow ? '#557F64' : '#2E7D32'); c.beginPath(); c.arc(dx + k + hash(k + yy) * 5 - 2, yy, 11, 0, 7); c.fill(); }
     c.fillStyle = TH.snow ? '#FFFFFF' : '#E53950'; for (let k = 12; k < dw - 6; k += 24){ c.beginPath(); c.arc(dx + k, dy + 16 + hash(k + x) * (y2 - dy - 30), 3, 0, 7); c.fill(); } c.restore();
-  } else { // the subtle hint: a cracked patch near the entrance
-    c.strokeStyle = 'rgba(40,22,8,.55)'; c.lineWidth = 1.6; c.beginPath(); c.moveTo(x + 6, top + 30); c.lineTo(x + 16, top + 42); c.lineTo(x + 10, top + 54); c.lineTo(x + 20, top + 66); c.moveTo(x + 16, top + 42); c.lineTo(x + 26, top + 46); c.moveTo(x + 10, top + 54); c.lineTo(x + 3, top + 60); c.stroke(); }
+  } else { // the subtle hint: a cracked patch near the far end
+    const cx = x2 - 30, cy = top + 70; c.strokeStyle = 'rgba(40,22,8,.55)'; c.lineWidth = 1.6; c.beginPath(); c.moveTo(cx + 6, cy); c.lineTo(cx - 4, cy + 12); c.lineTo(cx + 2, cy + 24); c.lineTo(cx - 8, cy + 36); c.moveTo(cx - 4, cy + 12); c.lineTo(cx - 14, cy + 16); c.moveTo(cx + 2, cy + 24); c.lineTo(cx + 10, cy + 30); c.moveTo(cx - 8, cy + 36); c.lineTo(cx - 2, cy + 52); c.stroke(); }
   c.restore(); c.restore();
-  // the grass edge on top always looks solid (it is the roof you can stand on)
-  c.save(); c.beginPath(); c.rect(x, top - 12, w, 30); c.clip(); drawGround(c, col); c.restore();
-  // faint twinkle near the entrance
-  if (!s.found || s.reveal > 0.05){ const tw = (Math.sin(t * 3 + x) + 1) / 2; c.save(); c.globalAlpha = 0.25 + 0.4 * tw; c.fillStyle = '#FFF6C0'; const sx = x + 14, sy = y2 - 34; c.beginPath(); for (let q = 0; q < 8; q++){ const rr = q % 2 ? 1.6 : 5 + tw * 2, aa = q * Math.PI / 4; c.lineTo(sx + Math.cos(aa) * rr, sy + Math.sin(aa) * rr); } c.closePath(); c.fill(); c.restore(); }
+  // faint twinkle near the doorway
+  if (!s.found || s.reveal > 0.05){ const tw = (Math.sin(t * 3 + x) + 1) / 2; c.save(); c.globalAlpha = 0.25 + 0.4 * tw; c.fillStyle = '#FFF6C0'; const sx = x2 - 16, sy = y2 - 34; c.beginPath(); for (let q = 0; q < 8; q++){ const rr = q % 2 ? 1.6 : 5 + tw * 2, aa = q * Math.PI / 4; c.lineTo(sx + Math.cos(aa) * rr, sy + Math.sin(aa) * rr); } c.closePath(); c.fill(); c.restore(); }
 }
 // ---------- trap drawing ----------
 function drawSpikeRow(c, x, w, gy, h, col){ const n = Math.max(2, Math.round(w / 10)); c.fillStyle = col || '#B0BEC5'; c.beginPath(); for (let k = 0; k < n; k++){ const x0 = x + k * w / n; c.moveTo(x0, gy); c.lineTo(x0 + w / n / 2, gy - h); c.lineTo(x0 + w / n, gy); } c.fill(); c.fillStyle = 'rgba(255,255,255,.55)'; c.beginPath(); for (let k = 0; k < n; k++){ const x0 = x + k * w / n; c.moveTo(x0 + w / n * 0.3, gy - 2); c.lineTo(x0 + w / n / 2, gy - h + 2); c.lineTo(x0 + w / n * 0.42, gy - 2); } c.fill(); }
@@ -1661,7 +1834,7 @@ function renderGame(){
   for (const g of L.ground) if (vis(g.x, g.x + g.w)) drawGround(ctx, g, L.tod);
   for (const s of L.spikes) if (vis(s.x, s.x + s.w)) drawSpikes(ctx, s);
   for (const pd of L.pads) if (vis(pd.x - 20, pd.x + pd.w + 20)) drawPad(ctx, pd, t);
-  for (const sc of L.secrets) if (vis(sc.x1, sc.x2)) drawSecretCave(ctx, sc);
+  for (const sc of L.secrets) if (vis(sc.x1, sc.x2)) drawSecretCave(ctx, sc, t);
   for (const cp of L.cps) if (vis(cp.x - 20, cp.x + 60)) drawCheckpoint(ctx, cp, t);
   if (vis(L.goal.x - 140, L.goal.x + 140)) drawGoal(ctx, L.goal, t);
   for (const p of L.plats) if (vis(p.x, p.x + p.w)) drawPlat(ctx, p, t);
@@ -1673,6 +1846,7 @@ function renderGame(){
     if (tz.big) drawBonusTz(ctx, tz.x, yy, spin, t + tz.ph);
     else drawTryzub(ctx, tz.x, yy, 0.78, spin, t + tz.ph, true); }
   for (const h of L.hearts) if (!h.got && vis(h.x - 20, h.x + 20)){ const s = 13 + Math.sin(t * 5 + h.ph) * 1.5; ctx.save(); ctx.globalAlpha = 0.35; ctx.fillStyle = '#FFE0EC'; ctx.beginPath(); ctx.arc(h.x, h.y, 22, 0, 7); ctx.fill(); ctx.restore(); drawBorscht(ctx, h.x, h.y + Math.sin(t * 2.5 + h.ph) * 4, s / 12, t); }
+  for (const cr of (L.crit || [])) if (vis(cr.x - 40, cr.x + 40)) drawCrit(ctx, cr, t);
   // player
   const visible = !(P.hurtT > 0 && P.hurtKind === 'fall') && !(P.inv > 0 && Math.floor(P.inv * 12) % 2 === 0);
   if (visible){ const px = P.x + P.w / 2, feet = P.y + P.h;
@@ -1683,6 +1857,7 @@ function renderGame(){
   // ceilings drawn after the player so he visibly ducks under them
   for (const z of L.ceil) if (vis(z.x - 10, z.x + z.w + 10)) drawCeil(ctx, z, t);
   for (const sc of L.secrets) if (vis(sc.x1 - 10, sc.x2 + 10)) drawSecretWall(ctx, sc, t);
+  for (const sc of L.secrets) if (sc.crit && vis(sc.x1, sc.x2)) for (const cr of sc.crit) drawCritTag(ctx, sc, cr, t, cam);
   for (const b of L.bees) if (vis(b.x - 30, b.x + 30)) drawBee(ctx, b, t);
   if (G.stork) drawStork(ctx, G.stork, t);
   drawParticles(false);
@@ -1720,8 +1895,8 @@ function drawHUD(){
   ctx.fillStyle = '#0D47A1'; ctx.fillText(txt, 20, cy - 8); let ut = G.li === BONUS ? 'Бонусний рівень – Золотий лелека' : 'Рівень ' + (G.li + 1) + '/12 – ' + G.L.ua, f2 = 13; ctx.font = font(f2, false); while (ctx.measureText(ut).width > 335 && f2 > 10){ f2--; ctx.font = font(f2, false); } ctx.fillStyle = '#1B5E9E'; ctx.fillText(ut, 20, cy + 13);
   // borscht lives
   const lx = 372; for (let k = 0; k < 3; k++){ if (k < G.lives) drawBorscht(ctx, lx + k * 33, cy + 3, 0.95, G.T + k); else { ctx.save(); ctx.globalAlpha = 0.28; ctx.filter = 'grayscale(1)'; drawBorscht(ctx, lx + k * 33, cy + 3, 0.95, 0); ctx.restore(); } }
-  drawTryzub(ctx, 514, cy - 4, 0.7); ctx.fillStyle = '#7A5200'; ctx.font = font(21); ctx.fillText(G.tz + '/' + G.L.tryz.length, 536, cy - 7);
-  { const nb = G.L.tryz.filter(q => q.big).length, bt = '★ Bonus ' + G.bigTz + '/' + nb + ' · Бонус'; let bf = 11; ctx.font = font(bf); while (ctx.measureText(bt).width > 112 && bf > 8){ bf--; ctx.font = font(bf); } ctx.fillStyle = G.bigTz && G.bigTz === nb ? '#C77800' : '#0057B7'; ctx.fillText(bt, 500, cy + 15); }
+  drawTryzub(ctx, 514, cy - 4, 0.7); ctx.fillStyle = '#7A5200'; ctx.font = font(21); ctx.fillText(G.tz + '/' + tzShown(G.L), 536, cy - 7);
+  { const nb = bigShown(G.L), bt = '★ Bonus ' + G.bigTz + '/' + nb + ' · Бонус'; let bf = 11; ctx.font = font(bf); while (ctx.measureText(bt).width > 112 && bf > 8){ bf--; ctx.font = font(bf); } ctx.fillStyle = G.bigTz && G.bigTz === nb ? '#C77800' : '#0057B7'; ctx.fillText(bt, 500, cy + 15); }
   ctx.fillStyle = '#0D47A1'; { const st = 'Score ' + (runScoreSoFar() + levelLiveScore()); let sf = 20; ctx.font = font(sf); while (ctx.measureText(st).width > 138 && sf > 13){ sf--; ctx.font = font(sf); } ctx.fillText(st, 622, cy - 6); } ctx.font = font(12, false); ctx.fillStyle = '#1B5E9E'; ctx.fillText('Рахунок', 622, cy + 14);
   ctx.strokeStyle = '#0D47A1'; ctx.lineWidth = 2.4; ctx.beginPath(); ctx.arc(770, cy, 11, 0, 7); ctx.stroke(); ctx.beginPath(); ctx.moveTo(770, cy); ctx.lineTo(770, cy - 7); ctx.moveTo(770, cy); ctx.lineTo(775, cy + 3); ctx.stroke();
   ctx.font = font(22); ctx.fillText(fmtTime(G.time), 786, cy);
@@ -1825,7 +2000,7 @@ function drawLevelTile(b, focused, hov){
   ctx.textAlign = 'left'; let fs = 15; ctx.font = font(fs); while (ctx.measureText(INFO[i][0]).width > b.w - 56 && fs > 11){ fs--; ctx.font = font(fs); }
   ctx.fillStyle = b.locked ? '#6B7280' : '#0D47A1'; ctx.fillText(INFO[i][0], b.x + 48, b.y + 36);
   ctx.font = font(11, false); ctx.fillStyle = '#5A6A85'; if (b.locked){ ctx.fillText(INFO[i][1], b.x + 48, b.y + 52); drawLock(ctx, b.x + b.w / 2, b.y + 70, 0.9); ctx.font = font(13); ctx.textAlign = 'center'; ctx.fillStyle = '#6B7280'; ctx.fillText('Locked · Закрито', b.x + b.w / 2, b.y + 98); }
-  else { ctx.font = font(14, false); ctx.fillStyle = '#333'; ctx.font = font(11, false); ctx.fillStyle = '#5A6A85'; ctx.fillText(INFO[i][1], b.x + 48, b.y + 52); ctx.font = font(13, false); ctx.fillStyle = '#333'; ctx.fillText('Best score · рекорд: ' + (best.score == null ? '—' : best.score), b.x + 12, b.y + 72); ctx.fillText('Best time · час: ' + fmtTime(best.time), b.x + 12, b.y + 88); { const ns = LEVELS[i].secrets.length; ctx.font = font(11); ctx.fillStyle = (best.sec || 0) >= ns ? '#2E7D32' : '#7A5200'; ctx.fillText('Secrets · Секрети ' + Math.min(best.sec || 0, ns) + '/' + ns, b.x + 12, b.y + 101); }
+  else { ctx.font = font(14, false); ctx.fillStyle = '#333'; ctx.font = font(11, false); ctx.fillStyle = '#5A6A85'; ctx.fillText(INFO[i][1], b.x + 48, b.y + 52); ctx.font = font(13, false); ctx.fillStyle = '#333'; ctx.fillText('Best score · рекорд: ' + (best.score == null ? '—' : best.score), b.x + 12, b.y + 72); ctx.fillText('Best time · час: ' + fmtTime(best.time), b.x + 12, b.y + 88); { const ns = LEVELS[i].secrets.length; if ((best.sec || 0) > 0){ ctx.font = font(11); ctx.fillStyle = (best.sec || 0) >= ns ? '#2E7D32' : '#7A5200'; ctx.fillText('Secrets · Секрети ' + Math.min(best.sec || 0, ns) + '/' + ns, b.x + 12, b.y + 101); } } // shown only once one is found, so it never tells which levels hide secrets
     if (best.score != null){ ctx.fillStyle = '#2E9E3A'; ctx.font = font(16); ctx.textAlign = 'right'; ctx.fillText('✓', b.x + b.w - 12, b.y + 88); } }
   ctx.textBaseline = 'alphabetic'; ctx.restore();
 }
@@ -2132,7 +2307,7 @@ function renderOverlay(){
     ctx.fillText('Taras is a little dizzy and needs a rest.', 480, 200); ctx.font = font(14, false); ctx.fillStyle = '#1B5E9E'; ctx.fillText('Тарасові трохи паморочиться — йому треба відпочити.', 480, 219); ctx.font = font(16); ctx.fillStyle = '#0D47A1'; ctx.fillText(G.li === BONUS ? 'Beat level 12 again · Пройди 12 рівень знову' : G.cp ? 'Back with 3 borscht · Знову 3 борщі' : 'Level ' + (G.li + 1) + ', 3 borscht · Рівень ' + (G.li + 1) + ', 3 борщі', 480, 246); ctx.font = font(14, false); ctx.fillText('Tryzubs this try · Тризуби цієї спроби: ' + G.tz + ' / ' + G.L.tryz.length, 480, 270);
     drawTaras(ctx, 316, 456, { face: 1, pose: 'dizzy', t: G.titleT, scale: 1.2 }); drawTryzub(ctx, 646, 430, 0.9); }
   if (s === 'complete'){ const r = G.result; panel(220, 64, 520, 430); titleText('Level Complete!', 480, 114, 32); ctx.font = font(18); ctx.fillStyle = '#C8102E'; ctx.textAlign = 'center'; ctx.fillText('Рівень пройдено!', 480, 138); ctx.font = font(14, false); ctx.fillStyle = '#0D47A1'; ctx.fillText(G.L.name + ' · ' + G.L.ua + '  ·  Чудово!', 480, 160);
-    const rows = [['Level time · Час', fmtTime(r.t) + (r.nbT ? '   ★ best · рекорд!' : '')], ['Tryzubs · Тризуби', r.tz + ' / ' + r.tot], ['Bonus · Бонус', r.big + ' / ' + r.nbig + '  (+500)'], ['Bees stomped · Бджоли', r.bees + '  (×100)'], ['Secrets found · Секрети', r.sec + ' / ' + r.nsec], ['Time bonus · Бонус за час', '+' + r.bonus], ['Borscht carried on · Борщ далі', G.lives + ' / 3'], ['Level score · Рахунок', r.score + (r.nbS ? '   ★ best · рекорд!' : '')]];
+    const rows = [['Level time · Час', fmtTime(r.t) + (r.nbT ? '   ★ best · рекорд!' : '')], ['Tryzubs · Тризуби', r.tz + ' / ' + r.tot], ['Bonus · Бонус', r.big + ' / ' + r.nbig + '  (+500)'], ['Bees stomped · Бджоли', r.bees + '  (×100)'], ...(r.sec > 0 ? [['Secrets found · Секрети', r.sec + ' / ' + r.nsec]] : []), ['Time bonus · Бонус за час', '+' + r.bonus], ['Borscht carried on · Борщ далі', G.lives + ' / 3'], ['Level score · Рахунок', r.score + (r.nbS ? '   ★ best · рекорд!' : '')]];
     rows.forEach((rw, k) => { const y = 184 + k * 24; ctx.textAlign = 'left'; ctx.font = font(16); ctx.fillStyle = '#0D47A1'; ctx.fillText(rw[0], 262, y); ctx.textAlign = 'right'; ctx.fillStyle = k === rows.length - 1 ? '#C8102E' : '#222'; ctx.fillText(rw[1], 698, y); });
     drawTryzub(ctx, 262, 118, 0.8); drawTryzub(ctx, 698, 118, 0.8); }
   if (s === 'win'){ const wi = G.winInfo; panel(90, 26, 780, 500); titleText('You win! · Перемога!', 480, 72, 32); ctx.font = font(15); ctx.fillStyle = '#C8102E'; ctx.textAlign = 'center'; ctx.fillText('You did it, Taras! · Ти зміг, Тарасе! Слава Україні!', 480, 94);
@@ -2216,7 +2391,8 @@ function frame(now){
 requestAnimationFrame(frame);
 
 // ================= Test hooks =================
-window.__game = { hintBox, hintClashes, hintObstacles, hurt, respawnSafe, spotSafe, trapSpan, get safe(){ return G.safe; }, MAX_LIVES, saveBest, openChest, startBonus, replayLevel12, buildBonus, BONUS, trapState, trapHits, storkPhase, hitStork, get stork(){ return G.stork; }, ACH, checkAch, achEvent, get achQueue(){ return achQueue; }, WORLDS, SFX, levelLiveScore, get particles(){ return particles; }, tk, pointers, drawTaras, drawBee, drawTryzub, ctx, G, P, PH, CLEAR, LEVELS, INFO, keys, buildLevel, startLevel, startRun, getButtons, clickAt, render, completeLevel, finishGame, toMenu,
+recheckAch(); // after UPG / COS exist, so every rule can be evaluated
+window.__game = { critBox, secFullLv, bigShown, tzShown, recheckAch, secTotal, hintBox, hintClashes, hintObstacles, hurt, respawnSafe, spotSafe, trapSpan, get safe(){ return G.safe; }, MAX_LIVES, saveBest, openChest, startBonus, replayLevel12, buildBonus, BONUS, trapState, trapHits, storkPhase, hitStork, get stork(){ return G.stork; }, ACH, checkAch, achEvent, get achQueue(){ return achQueue; }, WORLDS, SFX, levelLiveScore, get particles(){ return particles; }, tk, pointers, drawTaras, drawBee, drawTryzub, ctx, G, P, PH, CLEAR, LEVELS, INFO, keys, buildLevel, startLevel, startRun, getButtons, clickAt, render, completeLevel, finishGame, toMenu,
   get best(){ return BEST; }, reloadBest(){ BEST = loadBest(); }, updateCamera,
   tick(n, dt){ for (let k = 0; k < (n || 1); k++) update(dt || STEP); }, press(k){ if (k === 'J' && !keys.J) jumpEdge = true; keys[k] = true; }, release(k){ keys[k] = false; } };
 })();
