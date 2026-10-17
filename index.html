@@ -176,6 +176,9 @@ const TOD = [
 ];
 
 // ---- Everything must stay visible below the HUD bar (bottom edge 66 px) + a 20 px margin ----
+/* bonus platforms rise 165 px above the takeoff surface: ~60% of a perfect base double jump (~276 px) and well under a sloppy human one
+   (median ~240 px with short taps and late second presses), yet 19 px over the best base single jump (146 px), so a double jump is still needed */
+const BONUS_RISE = 165;
 const HUD_SAFE = 88, PLAT_MIN = HUD_SAFE + PH.STAND + 26; // highest allowed platform top (player standing on it stays visible)
 function keepBelowHud(L){
   for (const p of L.plats){ if (p.elev) continue; const top = p.kind === 'vert' ? p.y0 - p.A : p.y; if (top >= PLAT_MIN) continue; const d = PLAT_MIN - top;
@@ -264,9 +267,9 @@ function buildLevel(i){
     flowers(x, w, y); x += w; };
   S.log = () => { const w = ri(480, 580); addGround(x, w, y); L.logs.push({ x0: x + 90, x1: x + w - 90, y: y - 18, r: 18, sp: 85 + d * 95, x: x + w - 90, dir: -1, rot: 0, bale: [1, 3, 6, 7, 8].includes(i) }); rowT(x + 110, x + w - 110, y - 115, 3); x += w; };
   // high bonus platform: only reachable with the double jump, holds big glowing BONUS tryzubs
-  S.bonus = () => { y = lowTo(380); const w = 520; addGround(x, w, y); const bw = 100, bx = Math.round(x + w / 2 - bw / 2), by = y - 205;
+  S.bonus = () => { y = lowTo(380); const w = 520; addGround(x, w, y); const bw = 100, bx = Math.round(x + w / 2 - bw / 2), by = y - BONUS_RISE;
     const pl = plat('bonus', bx, by, bw, {}); const b = { x1: bx, x2: bx + bw, y: by, gy: y, pl, items: [] };
-    for (const ox of [50]){ const t = { x: bx + ox, y: by - 40, got: false, ph: R() * 6, pin: true }; L.tryz.push(t); b.items.push(t); } b.practice = true; /* L1 double-jump practice platform: regular tryzub, no bonus */
+    for (const ox of [50]){ const t = { x: bx + ox, y: by - 60, got: false, ph: R() * 6, pin: true }; L.tryz.push(t); b.items.push(t); } b.practice = true; /* L1 double-jump practice platform: regular tryzub, no bonus */
     L.bonus.push(b); b.pad = addPad(bx + bw / 2, y, x, w, b); rowT(x + 50, x + 150, y - 42, 2); rowT(x + w - 150, x + w - 50, y - 42, 2);
     if (i === 0 && L.bonus.length === 1) L.hints.push({ x: Math.max(250, x + w / 2 - 320), y: y - 300 < 80 ? 80 : y - 290, t: 'Press W again in the air: DOUBLE JUMP!', ua: 'Натисни W ще раз у повітрі: ПОДВІЙНИЙ СТРИБОК!', dj: true });
     flowers(x, w, y); x += w; };
@@ -300,10 +303,10 @@ function buildLevel(i){
   const trap = o => { L.traps.push(Object.assign({ ph: R() * 10 }, o)); };
   S.popspike = () => { const w = ri(380, 440); addGround(x, w, y); const n = i < 4 ? 2 : 3, per = 3.0 - d * 0.6; for (let k = 0; k < n; k++){ const tw = 40 + ri(0, 2) * 10; trap({ kind: 'pop', x: Math.round(x + 70 + k * (w - 160) / Math.max(1, n - 1) - (n === 1 ? 0 : 0)), w: tw, gy: y, per, ph: k * per / n, h: 22 }); }
     rowT(x + 60, x + w - 60, y - 120, 2); flowers(x, w, y); x += w; };
-  S.bonusC = () => { const kind = BONUS_AT[i][1], bw = 80;
+  S.bonusC = () => { const kind = BONUS_AT[i][1], bw = 100;
     const mk = (bx, by, gy, from) => { const pl = plat('bonus', bx, by, bw, {}); const b = { x1: bx, x2: bx + bw, y: by, gy, pl, items: [], kind, from: from || null, challenge: true };
-      const t = { x: bx + bw / 2, y: by - 40, got: false, ph: R() * 6, big: true }; L.tryz.push(t); b.items.push(t); L.bonus.push(b); return b; };
-    if (kind === 'trap'){ y = lowTo(380); const w = 560; addGround(x, w, y); const bx = Math.round(x + w / 2 - bw / 2); mk(bx, y - 205, y);
+      const t = { x: bx + bw / 2, y: by - 70, got: false, ph: R() * 6, big: true }; /* high enough over the platform that a single jump from below can't brush it */ L.tryz.push(t); b.items.push(t); L.bonus.push(b); return b; };
+    if (kind === 'trap'){ y = lowTo(380); const w = 560; addGround(x, w, y); const bx = Math.round(x + w / 2 - bw / 2); mk(bx, y - BONUS_RISE, y);
       const per = 2.7; [[bx - 130, 0], [bx - 10, 1], [bx + bw + 60, 2]].forEach(([tx, k]) => trap({ kind: 'pop', x: Math.round(tx), w: 70, gy: y, per, ph: k * per / 3, h: 22 }));
       bee('bob', { cx: bx - 70, cy: y - 150, A: 36 }); flowers(x, 60, y); x += w; return; }
     y = lowTo(kind === 'vert' ? 420 : 385); /* low banks: room for a bonus that needs a real double jump yet stays below the HUD */
@@ -311,8 +314,8 @@ function buildLevel(i){
     const g1 = Math.round(rr(gapMin * 0.8, gapMax * 0.8)), pw = 110; let ty = clamp(y - ri(0, 20), 365, 440), pl, px1, px2, top;
     if (kind === 'move'){ const A = 70; px1 = x + g1; px2 = px1 + 2 * A + pw; pl = plat('move', px1 + A, ty, pw, { A }); L.path.push({ type: 'move', x1: px1, x2: px2, y1: ty, y2: ty }); top = ty; }
     else if (kind === 'vert'){ ty = clamp(ty, 405, 445); const A = 40; px1 = x + g1; px2 = px1 + pw; pl = plat('vert', px1, ty, pw, { A }); L.path.push({ type: 'vert', x1: px1, x2: px2, y1: ty - A, y2: ty + A }); top = ty - A; }
-    else { px1 = x + g1; px2 = px1 + pw; pl = plat('fall', px1, ty, pw, {}); L.path.push({ type: 'fall', x1: px1, x2: px2, y1: ty, y2: ty }); top = ty; }
-    mk(Math.round((px1 + px2) / 2 - bw / 2 + 30), Math.max(130, top - 200), top, pl);
+    else { px1 = x + g1; px2 = px1 + pw; pl = plat('fall', px1, ty, pw, { shk: 1.2 }); /* bonus crumbling platform: 1.2 s of shaking leaves time to set up the jump */ L.path.push({ type: 'fall', x1: px1, x2: px2, y1: ty, y2: ty }); top = ty; }
+    mk(Math.round((px1 + px2) / 2 - bw / 2), Math.max(130, top - BONUS_RISE), top, pl);
     const g2 = Math.round(rr(gapMin * 0.8, gapMax * 0.8)); x = px2 + g2; y = clampY(Math.max(ty, Math.min(ty + 40, 440)) + ri(0, 10)); const w = ri(260, 320); /* never higher than the challenge platform, so the bonus can't be reached with a plain jump from the banks */ addGround(x, w, y); flowers(x, w, y); x += w; };
   S.thorn = () => { const w = ri(340, 400); addGround(x, w, y); const per = 3.2 - d * 0.6; trap({ kind: 'thorn', x: Math.round(x + w / 2 - 25), w: 50, gy: y, per, ph: R() * per, h: 44 }); arcT(x + w / 2 - 110, x + w / 2 + 110, y, y, 2, 90); flowers(x, w, y); x += w; };
   S.pendulum = () => { const w = ri(360, 420); addGround(x, w, y); const ax = x + w / 2; trap({ kind: 'swing', x: ax, ay: y - 170, len: 118, r: 16, amp: 0.95, om: 1.9 + d * 0.9, gy: y }); rowT(x + 50, x + w - 50, y - 42, 2); flowers(x, w, y); x += w; };
@@ -361,15 +364,15 @@ function buildLevel(i){
     S.popspike(); S.pit(); S.ram(); S.thorn(); S.pit(); S.popspike();
   }
   addGround(x, 560, y); L.goal = { x: x + 330, gy: y }; flowers(x, 200, y); rowT(x + 60, x + 220, y - 42, 3); x += 560;
-  // make sure every bonus platform really needs the double jump (even with max upgrades) but is reachable with it at base stats
-  const single = singleJumpProfile(PH.JV * 1.12, PH.RUN * 1.15);
+  // make sure every bonus platform really needs the double jump at base stats (15 px to spare) but stays an easy-ish double jump (BONUS_RISE)
+  const single = singleJumpProfile(PH.JV, PH.RUN);
   const surfaces = () => L.path.map(p => ({ x1: p.x1, x2: p.x2, top: p.y1, f: null })).concat(L.floats.map(f => ({ x1: f.x1, x2: f.x2, top: f.y, f })));
   const removeItems = o => { for (const it of o.items){ let k = L.tryz.indexOf(it); if (k >= 0) L.tryz.splice(k, 1); k = L.hearts.indexOf(it); if (k >= 0) L.hearts.splice(k, 1); } };
-  const reachB = (b, sf) => { const dx = sf.x2 < b.x1 ? b.x1 - sf.x2 : sf.x1 > b.x2 ? sf.x1 - b.x2 : 0; return single(dx) >= sf.top - b.y - 6; };
+  const reachB = (b, sf) => { const dx = sf.x2 < b.x1 ? b.x1 - sf.x2 : sf.x1 > b.x2 ? sf.x1 - b.x2 : 0; return single(dx) + 15 >= sf.top - b.y; };
   for (const b of L.bonus.slice()){
-    const setY = ny => { b.y = ny; b.pl.y = b.pl.y0 = ny; b.items.forEach(t => t.y = ny - 36); };
+    const setY = ny => { const d = ny - b.y; b.y = ny; b.pl.y = b.pl.y0 = ny; b.items.forEach(t => t.y += d); };
     const setX = nx => { const dx = nx - b.x1; b.x1 += dx; b.x2 += dx; b.pl.x = b.pl.x0 = b.x1; b.items.forEach(t => t.x += dx); if (b.pad) b.pad.x += dx; };
-    while (surfaces().some(sf => !sf.f && reachB(b, sf)) && b.gy - (b.y - 5) <= 207 && b.y - 5 >= 115) setY(b.y - 5);
+    while (surfaces().some(sf => !sf.f && reachB(b, sf)) && b.gy - (b.y - 5) <= BONUS_RISE + 10 && b.y - 5 >= 115) setY(b.y - 5);
     // still reachable from a higher neighbour? slide it away along its own ground
     if (surfaces().some(sf => !sf.f && reachB(b, sf))){ const g = L.ground.find(q => q.y === b.gy && q.x <= b.x1 && q.x + q.w >= b.x2), x0 = b.x1; let done = false;
       for (let off = 20; off <= 200 && !done; off += 20) for (const sg of [1, -1]){ const nx = x0 + sg * off; if (!g || nx < g.x + 40 || nx + (b.x2 - b.x1) > g.x + g.w - 40) continue;
@@ -626,7 +629,7 @@ function updatePlayer(dt){
     if (pl.st === 'gone') continue;
     if (P.x + P.w > pl.x && P.x < pl.x + pl.w && P.y + P.h >= pl.y && prevBottom <= Math.max(pl.y, pl.y - pl.dy) + 3){
       P.y = pl.y - P.h; P.vy = 0; P.onGround = true; P.onPlat = pl;
-      if (pl.kind === 'fall' && pl.st === 'idle'){ pl.st = 'shake'; pl.t = 0.55; }
+      if (pl.kind === 'fall' && pl.st === 'idle'){ pl.st = 'shake'; pl.t = pl.shk || 0.55; }
     }
   }
   // bounce pads: landing on one launches Taras high (much higher than a jump)
@@ -2446,7 +2449,7 @@ requestAnimationFrame(frame);
 
 // ================= Test hooks =================
 recheckAch(); // after UPG / COS exist, so every rule can be evaluated
-window.__game = { BONUS_AT, bigTotal, BONUS_GOAL, riverBoats, drawWindmill, drawBoat, drawFence, groundTopFn, restartFromCheckpoint, startRun, critBox, secFullLv, bigShown, tzShown, recheckAch, secTotal, hintBox, hintClashes, hintObstacles, hurt, respawnSafe, spotSafe, trapSpan, get safe(){ return G.safe; }, MAX_LIVES, saveBest, openChest, startBonus, replayLevel12, buildBonus, BONUS, trapState, trapHits, storkPhase, hitStork, get stork(){ return G.stork; }, ACH, checkAch, achEvent, get achQueue(){ return achQueue; }, WORLDS, SFX, levelLiveScore, get particles(){ return particles; }, tk, pointers, drawTaras, drawBee, drawTryzub, ctx, G, P, PH, CLEAR, LEVELS, INFO, keys, buildLevel, startLevel, startRun, getButtons, clickAt, render, completeLevel, finishGame, toMenu,
+window.__game = { computeStats, BONUS_AT, bigTotal, BONUS_GOAL, riverBoats, drawWindmill, drawBoat, drawFence, groundTopFn, restartFromCheckpoint, startRun, critBox, secFullLv, bigShown, tzShown, recheckAch, secTotal, hintBox, hintClashes, hintObstacles, hurt, respawnSafe, spotSafe, trapSpan, get safe(){ return G.safe; }, MAX_LIVES, saveBest, openChest, startBonus, replayLevel12, buildBonus, BONUS, trapState, trapHits, storkPhase, hitStork, get stork(){ return G.stork; }, ACH, checkAch, achEvent, get achQueue(){ return achQueue; }, WORLDS, SFX, levelLiveScore, get particles(){ return particles; }, tk, pointers, drawTaras, drawBee, drawTryzub, ctx, G, P, PH, CLEAR, LEVELS, INFO, keys, buildLevel, startLevel, startRun, getButtons, clickAt, render, completeLevel, finishGame, toMenu,
   get best(){ return BEST; }, reloadBest(){ BEST = loadBest(); }, updateCamera,
   tick(n, dt){ for (let k = 0; k < (n || 1); k++) update(dt || STEP); }, press(k){ if (k === 'J' && !keys.J) jumpEdge = true; keys[k] = true; }, release(k){ keys[k] = false; } };
 })();
